@@ -92,11 +92,14 @@ export function build({ write = true } = {}) {
   if (write) {
     fs.mkdirSync(path.join(ROOT, "dist"), { recursive: true });
     fs.writeFileSync(path.join(ROOT, "dist", "planner.html"), html);
+    // Same page for GitHub Pages (Settings > Pages > main, /docs).
+    fs.mkdirSync(path.join(ROOT, "docs"), { recursive: true });
+    fs.writeFileSync(path.join(ROOT, "docs", "index.html"), html);
   }
   return { html, bytes: Buffer.byteLength(html), modules: Object.keys(mods).length };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const r = build();
-  console.log(`dist/planner.html: ${(r.bytes / 1024).toFixed(1)} KB, ${r.modules} modules`);
+  console.log(`dist/planner.html and docs/index.html: ${(r.bytes / 1024).toFixed(1)} KB, ${r.modules} modules`);
 }

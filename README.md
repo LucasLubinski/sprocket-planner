@@ -19,18 +19,12 @@ Test results right now: 69 of 69 pass (`node --test`).
 
 ## Commands
 
-Node.js 22 or newer is needed. It isn't installed on this laptop yet; install Node 22 LTS from nodejs.org.
+Building and testing need Node.js 22 or newer. Using the planner doesn't.
 
 ```
 node --test              # all tests (the UI tests need Chrome; they skip without it)
-node tools/build.mjs     # writes dist/planner.html
+node tools/build.mjs     # writes dist/planner.html and docs/index.html (the GitHub Pages copy)
 node tools/shoot.mjs <outDir> <name> 1366 768   # screenshot from headless Chrome
-```
-
-Until Node is installed, the copy bundled with Photoshop works:
-
-```
-& "C:\Program Files\Adobe\Adobe Photoshop 2026\node.exe" --test
 ```
 
 ## Folders
