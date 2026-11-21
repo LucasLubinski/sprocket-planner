@@ -1,39 +1,67 @@
 # Sprocket Planner
 
-One self-contained web page (`dist/planner.html`) for designing a 3D-printed pin sprocket and the drilled polycarbonate sheet it drives. The full brief is in `CLAUDE.md`; judgment calls are in `DECISIONS.md`.
+One self-contained web page, `dist/planner.html`, where students design a 3D-printed pin sprocket and the drilled polycarbonate sheet it drives, then copy a print-ready OpenSCAD file and save CNC files for the sheet. It runs offline by double-clicking the file in Chrome. It needs no install, no server and no internet.
 
-## Status (work in progress)
+- The full brief is in `CLAUDE.md`.
+- The judgment calls are in `DECISIONS.md`, with the five most worth a look at the top.
+- The hand checks for Danielle are in `CHECKLIST.md`.
 
-| Phase | State |
+## Handing it out
+
+- **Give students only `dist/planner.html`.** Everything is inside it: the code, the Windows 98 look and its font, and the full OpenSCAD model. Use a USB stick, a shared drive or email (it's about 0.4 MB).
+- **Windows:** double-click it. It opens in Chrome. **Chromebook:** open it from the Files app.
+- **Saved designs live in that browser on that laptop.** They don't travel with the file. To move a design to another laptop, use **File ▸ Save design to a file…**, then **Open a design file…** on the other laptop.
+- **Handing out a newer version:** replace the old `planner.html` with the new one. Saved designs, settings and locks carry over, because every version reads the same storage key (`sprocketPlanner.v1` in `state/storage.js`). If you ever change what's stored, add the old key to `OLDER_KEYS` and convert it in `migrate()`.
+- **If storage is blocked** (some school setups), the page still works and says designs won't be remembered.
+- A copy for the web is written to `docs/index.html` (GitHub Pages: Settings ▸ Pages ▸ branch `main`, folder `/docs`). It is the same file.
+
+## For students
+
+Help ▸ **How to use** (F1) explains the page in eight steps. Help ▸ **How to make the STL** walks through OpenSCAD and the slicer. Every box has a **?** button, and the title-bar **?** turns on "What's this?" mode for the drawings and meters. **Try these** loads teaching designs that each show one problem.
+
+## Building and testing
+
+You need Node.js 22 or newer (Chrome too for the UI tests). Students don't need either.
+
+```
+node tools/build.mjs     # bundles everything into dist/planner.html and docs/index.html
+node --test              # every test (117); the UI tests skip if Chrome isn't installed
+node tools/shoot.mjs <outDir> <name> 1366 768 [--full] [--eval "js"]   # screenshot from headless Chrome
+```
+
+What the tests check:
+
+| File | Checks |
 | --- | --- |
-| 1. Core math | Done. Reproduces every reference number. |
-| 2. Window, linked inputs, dimension model, drawings, two-way highlighting, measurements | Done. |
-| 3. Badges, ghosts, saved designs, side-by-side panels, compare table, settings | Done. |
-| 4. Turn dial, slide ruler, fit meters, How it works animation, "?" explainers | Done: dial (ghost names in a legend under it), ruler (labels above full-width bars), meters (markers at the same value stack), Try-these buttons, How it works loop, "?" explainers with small animations, and the title-bar "What's this?" mode. UI tests cover each. |
-| 5. Copy OpenSCAD file / settings, sheet SVG and DXF, track box | Done: Make it box with the Part choice, both copy buttons (clipboard, then a Select all box if blocked), SVG and DXF downloads, the track sizes and end-view drawing, How to make the STL and How to use help. `test/scad.test.js` checks the copied file. |
-| 6. Windows 98 polish | Done: 98.css look, title bar, menus with Alt letters, toolbar with yellow tooltips, group boxes, segmented meters, status bar, pixel icons, High Contrast scheme. Tests check that no text drops under 13 px, tap targets reach 44 px on touch screens, and drawing labels never cover pins, holes or each other. |
-| 7. Edit in the drawings, and locks | Done: drag handles on 13 dimensions (turn dial, ruler, wheel edge, push circle, travel, pin width, height, slant, hole size, hole spacing, sheet sizes), arrow keys on a focused handle, type-in-place on a dimension label (Enter applies, Escape cancels), padlocks, held boxes, the chooser and both pin options. Drags go through the same routing as typing. |
-| 8. Accessibility, phone checks, docs, Danielle's checklist | Not started. |
+| `test/reference.test.js`, `test/taper.test.js` | The brief's clearance tables to ±0.002 mm, hole counts, and taper angle ↔ tip size |
+| `test/analyze.test.js` | Warnings, fit zones, the hub checks, and the "holes run together" case |
+| `test/link.test.js`, `test/session.test.js` | Linked-field rules, locks and what moves instead, the chooser, pin options, badge baselines, saving and loading |
+| `test/scad.test.js` | The copied OpenSCAD file: every value filled in, nothing else changed, and byte-identical for the default design |
+| `test/build.test.js` | The handed-out file loads nothing from the internet, and one edit takes under 60 ms |
+| `test/ui.test.mjs` | Opens the built file in headless Chrome and drives it like a student. Covers every acceptance check in `CLAUDE.md` that a machine can run, plus no text under 13 px, 44 px tap targets on touch screens, labels never covering pins, holes or each other (8 to 40 pins, 1366 and 390 px), named controls, no sideways scroll, and storage blocked |
 
-Test results right now: 69 of 69 pass (`node --test`).
+## Updating the OpenSCAD model
 
-### Locks and pin options (added after Phase 4)
+- The model is `reference/polycarb_sprocket.scad`. The build copies it into the page unchanged. "Copy OpenSCAD file" changes only the values on the parameter lines, between `/* [What to make] */` and `/* [Hidden] */`.
+- To add a parameter, add its line to the .scad file, then add its design key and OpenSCAD name to `SCAD_NAMES` and its default to `BASE` in `core/params.js`. Add an input in `state/fields.js` if students should see it.
+- Keep the .scad defaults and the `BASE` defaults the same. A test checks that the default design copies out byte-for-byte equal to the .scad file.
+- Run `node --test`, then `node tools/build.mjs`, and hand out the new `dist/planner.html`. Then do section 1 of `CHECKLIST.md` again.
 
-- **Locking inputs:** padlocks on the main boxes. When a change would move a locked number, the planner moves another one and says why beside the box (and in the status bar). It refuses only when nothing can move. Boxes that the locks fix together show "held".
-- **Choosing what moves:** with "Let me choose" (Settings, or View menu), a chooser under the edited box lists every free number that could balance the change, with a preview. "Pick for me" skips it.
-- **Pin shape options:** "Keep the tip round" (sets the Tip size lock) and "Straight past the sheet" (Straight mode only).
-- The routing table and its words live in `state/link.js`; the lock state in `state/store.js`.
+## How it's built
 
-## Commands
+One data flow: the design (`state/store.js`) goes through `analyze()` (`core/analyze.js`) to a view model (`ui/vm.js`) that every drawing, table and meter reads. No drawing works out geometry on its own. Every dimension in a drawing is an object (`draw/svg.js`) with its setting, anchors, label and drag rule. The same objects drive highlighting, badges on labels, drag handles and type-in-place (`ui/handles.js`).
 
-Building and testing need Node.js 22 or newer. Using the planner doesn't.
+| Folder | What's in it |
+| --- | --- |
+| `reference/` | The two verified files, unchanged |
+| `core/` | Geometry and clearance sweep, taper angle, analysis and checks, the OpenSCAD and sheet files |
+| `state/` | The design, edits and badge baselines, linked fields and lock routing (`link.js`), saved designs, settings, storage |
+| `draw/` | One module per drawing |
+| `ui/` | Window, menus, toolbar, inputs, dialogs, tables, meters, export box, drag handles |
+| `styles/win98.css`, `vendor/98.css-0.1.21/` | The look. 98.css is MIT-licensed and its pixel font is CC BY-SA 3.0; both licenses are kept |
+| `tools/` | The build, the Chrome driver, screenshots, and in-page audits used by the tests |
 
-```
-node --test              # all tests (the UI tests need Chrome; they skip without it)
-node tools/build.mjs     # writes dist/planner.html and docs/index.html (the GitHub Pages copy)
-node tools/shoot.mjs <outDir> <name> 1366 768   # screenshot from headless Chrome
-```
+## Known limits
 
-## Folders
-
-`reference/` the two verified files, unchanged · `core/` geometry and analysis · `state/` design, edits, badges, saved designs, settings, storage · `draw/` one module per drawing · `ui/` the page · `styles/win98.css` · `vendor/98.css-0.1.21/` (MIT; font CC BY-SA 3.0, licenses kept) · `tools/` build and Chrome driver · `test/`.
+- The fit check is a 2D cut through the middle of the pins. It assumes perfectly placed holes and a rigid sheet, and ignores friction and print error. Holes drilled a little off will rub first at the tightest point the chart shows.
+- The page doesn't make STL files or a 3D preview. OpenSCAD does that from the copied file. A "Download .scad file" button would be an easy addition.

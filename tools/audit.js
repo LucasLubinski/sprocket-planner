@@ -38,3 +38,34 @@ window.__audit = function ({ touch = false } = {}) {
   }
   return [...new Set(out)];
 };
+
+// Accessibility basics: every visible control has a name, every drawing is an
+// image with a description, keyboard focus is visible, and the page never
+// scrolls sideways.
+window.__a11y = function () {
+  const out = [];
+  const nameOf = el => {
+    if (el.getAttribute("aria-label")) return el.getAttribute("aria-label");
+    if (el.getAttribute("aria-labelledby")) return el.getAttribute("aria-labelledby").split(/\s+/).map(id => (document.getElementById(id) || {}).textContent || "").join(" ").trim();
+    if (el.labels && el.labels.length) return [...el.labels].map(l => l.textContent).join(" ").trim();
+    if (el.title) return el.title;
+    return (el.textContent || "").trim();
+  };
+  for (const el of document.querySelectorAll("button, input:not([type=hidden]), select, textarea, [role=slider], [role=radio], [role=menuitem]")) {
+    if (!el.checkVisibility({ visibilityProperty: true })) continue;
+    if (!nameOf(el)) out.push("no name: " + el.outerHTML.slice(0, 80));
+  }
+  for (const svg of document.querySelectorAll("svg.drw")) {
+    if (!svg.checkVisibility()) continue;
+    if (svg.getAttribute("role") !== "img" || !svg.getAttribute("aria-label")) out.push("drawing without a description: " + svg.getAttribute("class"));
+  }
+  const se = document.scrollingElement;
+  if (se.scrollWidth > window.innerWidth + 1) out.push("sideways scroll: " + se.scrollWidth + " > " + window.innerWidth);
+  return out;
+};
+// Focus ring: the outline a focused control draws.
+window.__focusRing = function (el) {
+  el.focus();
+  const cs = getComputedStyle(el);
+  return { outline: cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) > 0, shadow: cs.boxShadow !== "none" };
+};

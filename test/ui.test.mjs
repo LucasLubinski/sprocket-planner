@@ -562,6 +562,57 @@ test("planner UI in headless Chrome", { skip: !chrome && "Chrome not found", tim
       assert.equal(await ev(`__t.badge("drumD")`), "▼ −2.06", "one edit: badges compare with 360°, not 361°");
     });
 
+    // ---------------- finish (phase 8) ----------------
+    await t.test("accessibility: every control has a name, every drawing a description, no sideways scroll (1366 and 390 px)", async () => {
+      const found = [];
+      for (const [w, h] of [[1366, 768], [390, 844]]) {
+        await fresh(w, h);
+        await ev(AUDIT + "; 1");
+        for (const [name, setup] of [["student", ""], ["expert", `__t.sp().store.setSettings({ detail: "expert", dimLabels: "all" }); __t.sp().store.setField("hub", "custom")`],
+          ["after edits", `__t.sp().store.beginEdit("t"); __t.sp().store.setField("teeth", 40); __t.sp().store.beginEdit("t"); __t.sp().store.setField("rotation", 1800)`]]) {
+          const r = await ev(`(async () => { ${setup}; await new Promise(r => setTimeout(r, 120)); return __a11y(); })()`);
+          for (const x of r) found.push(w + " px, " + name + ": " + x);
+        }
+      }
+      assert.deepEqual(found, []);
+    });
+
+    await t.test("keyboard: a visible focus ring on boxes, buttons, handles and chooser options", async () => {
+      await fresh();
+      await ev(AUDIT + "; 1");
+      const r = await ev(`(() => {
+        const out = {};
+        for (const [name, sel] of [["number box", "#f-rotation"], ["button", ".qmark"], ["lock", ".lockbtn"], ["toolbar", ".tb-btn"]]) {
+          const el = document.querySelector(sel);
+          const f = __focusRing(el);
+          out[name] = f.outline || f.shadow;
+        }
+        return out;
+      })()`);
+      for (const [k, v] of Object.entries(r)) assert.ok(v, k + " shows focus");
+    });
+
+    await t.test("with storage blocked, the page still works and says designs won't be remembered", async () => {
+      const p2 = await browser.newPage();
+      try {
+        await p2.viewport(1366, 768);
+        await p2.send("Page.addScriptToEvaluateOnNewDocument", { source: `Object.defineProperty(window, "localStorage", { get() { throw new DOMException("blocked", "SecurityError"); } });` });
+        await p2.goto(URL);
+        await p2.sleep(300);
+        const r = await p2.eval(`(async () => {
+          const note = document.getElementById("storage-note");
+          const st = window.SprocketPlanner.store;
+          st.beginEdit("t"); st.setField("rotation", 180);
+          await new Promise(r => setTimeout(r, 50));
+          return { ok: st.storageOk, note: note && !note.hidden ? note.textContent : "", drum: document.getElementById("f-drumD").value, status: document.querySelector(".st-msg").textContent };
+        })()`);
+        assert.equal(r.ok, false);
+        assert.match(r.note + " " + r.status, /won't be remembered/);
+        assert.equal(r.drum, "94.72", "edits still work");
+        assert.deepEqual(p2.errors, []);
+      } finally { await p2.close(); }
+    });
+
     // ---------------- Windows 98 look, readable sizes (phase 6) ----------------
     await t.test("no text under 13 px, tap targets 44 px on touch screens, also in menus and dialogs", async () => {
       const found = [];
