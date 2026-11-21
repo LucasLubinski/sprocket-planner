@@ -536,3 +536,15 @@ svg.panel .endmark { stroke: var(--follow); stroke-width: 1px; stroke-dasharray:
 .rt-note { margin: 2px 0 0; }
 @media (any-pointer: coarse) { .lockbtn { width: 44px; min-width: 44px; height: 44px; } .rt-opt { min-height: 44px; } }
 .heldmark[hidden], .f-route[hidden] { display: none; }
+
+/* ---- edit in the drawings ---- */
+svg.drw .dhandle { cursor: grab; outline: none; }
+svg.drw .dhandle .dh-hit { fill: transparent; stroke: none; }
+svg.drw .dhandle .dh-dot { fill: var(--hl); stroke: var(--paper); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+svg.drw .dhandle:hover .dh-dot, svg.drw .dhandle.active .dh-dot { stroke: var(--ink); }
+svg.drw .dhandle:focus-visible .dh-dot, svg.drw .dhandle:focus .dh-dot { stroke: var(--ink); stroke-width: 3px; }
+body.dragging, body.dragging * { cursor: grabbing !important; user-select: none; }
+svg.drw text.dl-edit { cursor: text; text-decoration: underline dotted; }
+.drawing.editing-on { position: relative; }
+.tip-edit { position: absolute; z-index: 5; height: 30px; font-size: 14px; padding: 2px 6px; }
+.drag-route { margin: 6px 0 0; }

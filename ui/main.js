@@ -26,6 +26,7 @@ const { renderMeters } = require("./meters.js");
 const { openExplainer, whatsThis } = require("./explain.js");
 const how = require("../draw/howitworks.js");
 const { createExport } = require("./export.js");
+const { createHandles } = require("./handles.js");
 
 const MODS = {
   dial: require("../draw/dial.js"),
@@ -106,6 +107,26 @@ function start() {
 
   // ---------- drawings ----------
   for (const [id, mod] of Object.entries(MODS)) app.drawings[id] = createDrawing($("#d-" + id), mod, LABELS[id] || "");
+  // drag handles and type-in-place on every drawing, added after each redraw
+  const handles = createHandles({ store, getVM: () => app.vm, setStatus, onRoute: (key, drawing) => { app.dragRoute = { key, drawing }; } });
+  app.handles = handles;
+  const dragNotes = {};
+  for (const d of Object.values(app.drawings)) {
+    handles.attach(d);
+    const render0 = d.render.bind(d);
+    d.render = vm => { render0(vm); handles.decorate(d); };
+    const fig = d.container.closest("figure") || d.container.parentElement;
+    dragNotes[d.id] = { route: h("div.f-route.drag-route", { hidden: true, "aria-live": "polite" }), routeSig: "", baseCls: "f-route drag-route" };
+    fig.appendChild(dragNotes[d.id].route);
+  }
+  function paintDragNotes() {
+    const dr = app.dragRoute;
+    for (const [id, holder] of Object.entries(dragNotes)) {
+      if (dr && dr.drawing === id && store.route && store.route.key === dr.key) inputs.routeInto(dr.key, holder);
+      else if (holder.routeSig || !holder.route.hidden) { holder.route.hidden = true; holder.route.innerHTML = ""; holder.routeSig = ""; }
+    }
+    if (dr && !(store.route && store.route.key === dr.key)) app.dragRoute = null;
+  }
   app.vmHooks = { onAnimated: el => highlighter.refresh(el) };
 
   // ---------- render ----------
@@ -132,6 +153,7 @@ function start() {
     renderMeters($("#meters"), vm);
     exporter.render(vm);
     for (const d of Object.values(app.drawings)) d.render(vm);
+    paintDragNotes();
     renderMeasure($("#measure"), vm, key => inputs.focusField(key));
     renderSaved($("#saved-list"), { store, actions: savedActions });
     renderCompareArea(vm);

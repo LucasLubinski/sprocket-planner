@@ -511,6 +511,57 @@ test("planner UI in headless Chrome", { skip: !chrome && "Chrome not found", tim
       assert.equal(await ev(`"locks" in __t.sp().store.saved[0] || "locks" in __t.sp().store.saved[0].design`), false);
     });
 
+    await t.test("dragging the spacing bar changes the travel exactly as typing the same spacing", async () => {
+      await fresh();
+      await typeInto("P", "10"); await blur();
+      const typed = await ev(`__t.sp().store.design.travel`);
+      await fresh();
+      const pos = await ev(`(() => {
+        document.querySelector("#sec-sheet").scrollIntoView();
+        const h = document.querySelector('svg.sheet .dhandle[data-key="P"] .dh-dot');
+        const r = h.getBoundingClientRect(), m = h.closest("svg").getScreenCTM();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2, pxPerMm: Math.hypot(m.a, m.b) };
+      })()`);
+      const dx = 0.475 * pos.pxPerMm; // 9.525 -> 10.0 mm
+      await page.mouse("mouseMoved", pos.x, pos.y, { buttons: 0 });
+      await page.mouse("mousePressed", pos.x, pos.y);
+      for (let i = 1; i <= 5; i++) await page.mouse("mouseMoved", pos.x + dx * i / 5, pos.y);
+      await page.mouse("mouseReleased", pos.x + dx, pos.y);
+      await settle();
+      assert.equal(await ev(`__t.val("P")`), "10.000");
+      assert.equal(await ev(`__t.sp().store.design.travel`), typed);
+    });
+
+    await t.test("type-in-place on a dimension label: Enter applies, Escape cancels", async () => {
+      await fresh();
+      const click = async () => {
+        const p = await ev(`(() => { document.querySelector("#sec-layout").scrollIntoView(); const l = document.querySelector('svg.layout [data-dim="' + __t.sp().drawings.layout.dims.find(d => d.key === "drumD").id + '"] text.dl-edit'); const r = l.getBoundingClientRect(); return [r.left + 10, r.top + r.height / 2]; })()`);
+        await page.click(p[0], p[1]); await settle();
+      };
+      await click();
+      assert.ok(await ev(`!!document.querySelector(".tip-edit")`), "a box opens on the label");
+      await page.type("60"); await page.key("Escape", { code: "Escape", keyCode: 27 }); await settle();
+      assert.equal(await ev(`__t.val("drumD")`), "46.21", "Escape cancels");
+      assert.ok(!(await ev(`!!document.querySelector(".tip-edit")`)));
+      await click();
+      await ev(`document.querySelector(".tip-edit").select(); 1`);
+      await page.type("60"); await page.key("Enter", { code: "Enter", keyCode: 13, text: "\r" }); await settle();
+      assert.equal(await ev(`__t.val("drumD")`), "60.00", "Enter applies");
+      assert.equal(await ev(`__t.val("rotation")`), "360", "the usual rule: the slide moved, not the turn");
+      assert.match(await ev(`(document.querySelector("#sec-layout .drag-route:not([hidden])") || {}).textContent || ""`), /Sheet slides: 6 in → 7\.71 in/, "the chooser shows beside the drawing");
+    });
+
+    await t.test("arrow keys nudge a focused handle (Shift for bigger steps)", async () => {
+      await fresh();
+      await ev(`document.querySelector('svg.dial .dhandle[data-key="rotation"]').focus(); 1`);
+      await page.key("ArrowUp", { code: "ArrowUp", keyCode: 38 }); await settle();
+      assert.equal(await ev(`__t.val("rotation")`), "361");
+      await page.key("ArrowUp", { code: "ArrowUp", keyCode: 38, modifiers: 8 }); await settle();
+      assert.equal(await ev(`__t.val("rotation")`), "376");
+      assert.equal(await ev(`document.activeElement.getAttribute("data-key")`), "rotation", "focus stays on the handle");
+      assert.equal(await ev(`__t.badge("drumD")`), "▼ −2.06", "one edit: badges compare with 360°, not 361°");
+    });
+
     // ---------------- Windows 98 look, readable sizes (phase 6) ----------------
     await t.test("no text under 13 px, tap targets 44 px on touch screens, also in menus and dialogs", async () => {
       const found = [];

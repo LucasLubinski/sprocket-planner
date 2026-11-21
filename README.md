@@ -12,7 +12,7 @@ One self-contained web page (`dist/planner.html`) for designing a 3D-printed pin
 | 4. Turn dial, slide ruler, fit meters, How it works animation, "?" explainers | Done: dial (ghost names in a legend under it), ruler (labels above full-width bars), meters (markers at the same value stack), Try-these buttons, How it works loop, "?" explainers with small animations, and the title-bar "What's this?" mode. UI tests cover each. |
 | 5. Copy OpenSCAD file / settings, sheet SVG and DXF, track box | Done: Make it box with the Part choice, both copy buttons (clipboard, then a Select all box if blocked), SVG and DXF downloads, the track sizes and end-view drawing, How to make the STL and How to use help. `test/scad.test.js` checks the copied file. |
 | 6. Windows 98 polish | Done: 98.css look, title bar, menus with Alt letters, toolbar with yellow tooltips, group boxes, segmented meters, status bar, pixel icons, High Contrast scheme. Tests check that no text drops under 13 px, tap targets reach 44 px on touch screens, and drawing labels never cover pins, holes or each other. |
-| 7. Drag handles and type-in-place | Not started. The dimension objects already carry drag and value info. |
+| 7. Edit in the drawings, and locks | Done: drag handles on 13 dimensions (turn dial, ruler, wheel edge, push circle, travel, pin width, height, slant, hole size, hole spacing, sheet sizes), arrow keys on a focused handle, type-in-place on a dimension label (Enter applies, Escape cancels), padlocks, held boxes, the chooser and both pin options. Drags go through the same routing as typing. |
 | 8. Accessibility, phone checks, docs, Danielle's checklist | Not started. |
 
 Test results right now: 69 of 69 pass (`node --test`).

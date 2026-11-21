@@ -254,10 +254,10 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
     row.routeSig = sig;
     row.route.innerHTML = "";
     if (r.refused) {
-      row.route.className = "f-route refused";
+      row.route.className = (row.baseCls || "f-route") + " refused";
       row.route.append(h("span.rt-ic", { html: svgIcon("stopSign", 16) }), h("span", desc.text));
     } else if (choose && lines.length > 1) {
-      row.route.className = "f-route chooser";
+      row.route.className = (row.baseCls || "f-route") + " chooser";
       const group = h("div.rt-opts", { role: "radiogroup", "aria-label": "What moves to make room" });
       const btns = lines.map(l => {
         const on = l.mover === r.mover;
@@ -279,7 +279,7 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
       row.route.append(h("div.rt-head", "What moves to make room?"), group);
       if (desc) row.route.append(h("p.rt-note", desc.text));
     } else if (desc || (choose && lines.length === 1)) {
-      row.route.className = "f-route note";
+      row.route.className = (row.baseCls || "f-route") + " note";
       const text = desc ? desc.text : "Only " + lines[0].name + " can move. " + whyFor(r.key, lines[0].mover) + " " + lines[0].text + ".";
       row.route.append(h("span.rt-ic", { html: svgIcon("info", 16) }), h("span", text));
     } else {
@@ -407,6 +407,8 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
 
   return {
     paint,
+    // the same note / chooser, shown beside a drawing after a drag or type-in-place
+    routeInto(key, holder) { paintRoute(key, holder); },
     focusField(key) {
       const r = rows.get(key);
       if (!r) return false;
