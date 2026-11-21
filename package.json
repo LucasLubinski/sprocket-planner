@@ -1,0 +1,14 @@
+{
+  "name": "sprocket-planner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sprocket Planner: one self-contained HTML file for designing a 3D-printed pin sprocket and the drilled polycarbonate sheet it drives.",
+  "scripts": {
+    "test": "node --test",
+    "build": "node tools/build.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

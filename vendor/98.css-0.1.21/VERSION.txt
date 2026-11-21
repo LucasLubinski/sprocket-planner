@@ -1,0 +1,10 @@
+98.css 0.1.21 (npm, published 2025-04-28)
+https://registry.npmjs.org/98.css/-/98.css-0.1.21.tgz
+integrity sha512-ddk5qtUWyapM0Bzd5jwGExoE5fdSEGrP+F5VbYjyZLf2c9UVmn6w2NPTvCsoD4BWdGsjdLjlkQGhWwWTJcYQJQ==
+
+Files copied unchanged from the package:
+  98.css            <- dist/98.css   (MIT, see LICENSE)
+  fonts/*.woff(2)   <- dist/          (MS Sans Serif FontStruction by "lou", CC BY-SA 3.0,
+                                       see fonts/*-license.txt and fonts/*-readme.txt)
+
+tools/build.mjs inlines 98.css and the fonts (as base64) into dist/planner.html.

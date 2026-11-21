@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Design a 3D-printed pin sprocket and the drilled polycarbonate sheet it drives.">
+<title>Sprocket Planner</title>
+<link rel="icon" href="data:,">
+<!-- build:css -->
+</head>
+<body class="detail-student">
+<div class="desktop">
+  <div class="window app-window" id="app">
+    <div class="title-bar" id="titlebar">
+      <div class="title-bar-text"><span class="app-icon" aria-hidden="true"></span><span class="app-title">Sprocket Planner</span></div>
+      <div class="title-bar-controls">
+        <button aria-label="Help" id="tb-help" aria-pressed="false" title="What's this? Click, then click any part of the window."></button>
+        <button aria-label="Minimize" class="deco" tabindex="-1" aria-hidden="true"></button>
+        <button aria-label="Maximize" class="deco" tabindex="-1" aria-hidden="true"></button>
+        <button aria-label="Close" class="deco" tabindex="-1" aria-hidden="true"></button>
+      </div>
+    </div>
+    <div class="menubar" id="menubar" aria-label="Main menu"></div>
+    <div class="toolbar" id="toolbar" role="toolbar" aria-label="Tools"></div>
+    <div class="client" id="client">
+      <aside class="pane pane-inputs" id="pane-inputs" aria-label="Design settings"></aside>
+      <main class="pane pane-views" id="pane-views"></main>
+    </div>
+    <div class="status-bar" id="statusbar"></div>
+  </div>
+</div>
+<div id="layer"></div>
+<noscript><p class="noscript">Sprocket Planner needs JavaScript. Open this file in Chrome.</p></noscript>
+<!-- build:js -->
+</body>
+</html>

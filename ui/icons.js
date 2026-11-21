@@ -1,0 +1,344 @@
+"use strict";
+// 16 x 16 pixel icons, drawn for this app (not copied from Windows).
+// Each row is 16 characters; each character is a palette color, "." is clear.
+
+const PAL = {
+  k: "#000000", w: "#ffffff", g: "#808080", l: "#c0c0c0", b: "#000080", B: "#1084d0",
+  t: "#008080", c: "#7fd8e8", r: "#c00000", R: "#ff4040", y: "#ffd800", Y: "#fff4a0",
+  G: "#008000", L: "#40c040", o: "#e07000", p: "#a000a0"
+};
+
+const ICONS = {
+  app: [
+    "......kkkk......",
+    ".....kttttk.....",
+    "..kk.kttttk.kk..",
+    "..ktkkttttkktk..",
+    "...kttttttttk...",
+    ".kkkttkkkkttkkk.",
+    "kttttkwwwwkttttk",
+    "ktttkwwkkwwktttk",
+    "ktttkwwkkwwktttk",
+    "kttttkwwwwkttttk",
+    ".kkkttkkkkttkkk.",
+    "...kttttttttk...",
+    "..ktkkttttkktk..",
+    "..kk.kttttk.kk..",
+    ".....kttttk.....",
+    "......kkkk......"
+  ],
+  save: [
+    "kkkkkkkkkkkkkkk.",
+    "kbbkwwwwwwwwkbbk",
+    "kbbkwwwwwwwwkbbk",
+    "kbbkwggggggwkbbk",
+    "kbbkwwwwwwwwkbbk",
+    "kbbkwggggggwkbbk",
+    "kbbkwwwwwwwwkbbk",
+    "kbbbkkkkkkkkbbbk",
+    "kbbbbbbbbbbbbbbk",
+    "kbbbkkkkkkkkbbbk",
+    "kbbklllllkllkbbk",
+    "kbbklllllkllkbbk",
+    "kbbklllllkllkbbk",
+    "kbbklllllkllkbbk",
+    ".kkkkkkkkkkkkkkk",
+    "................"
+  ],
+  compare: [
+    "kkkkkkk.........",
+    "kbbbbbk.........",
+    "kwwwwwk.........",
+    "kwyywwk.........",
+    "kwyywwkkkkkkkk..",
+    "kwwwwwkbbbbbbk..",
+    "kwwwwwkwwwwwwk..",
+    "kkkkkkkwccwwwk..",
+    "......kwccwwwk..",
+    "......kwwwwwwk..",
+    "......kwwwwwwk..",
+    "......kkkkkkkk..",
+    "................",
+    "..r..r..........",
+    "...rr...........",
+    "..r..r.........."
+  ],
+  play: [
+    "................",
+    "...kk...........",
+    "...kGk..........",
+    "...kLGk.........",
+    "...kLLGk........",
+    "...kLLLGk.......",
+    "...kLLLLGk......",
+    "...kLLLLLGk.....",
+    "...kLLLLLGk.....",
+    "...kLLLLGk......",
+    "...kLLLGk.......",
+    "...kLLGk........",
+    "...kLGk.........",
+    "...kGk..........",
+    "...kk...........",
+    "................"
+  ],
+  stop: [
+    "................",
+    "................",
+    "...kkkkkkkkkk...",
+    "...kRRRRRRRRk...",
+    "...kRrrrrrrRk...",
+    "...kRrrrrrrRk...",
+    "...kRrrrrrrRk...",
+    "...kRrrrrrrRk...",
+    "...kRrrrrrrRk...",
+    "...kRrrrrrrRk...",
+    "...kRrrrrrrRk...",
+    "...kRRRRRRRRk...",
+    "...kkkkkkkkkk...",
+    "................",
+    "................",
+    "................"
+  ],
+  scad: [
+    "kkkkkkkkkk......",
+    "kwwwwwwwwkk.....",
+    "kwwwwwwwwkwk....",
+    "kwwkkkwwwkkkk...",
+    "kwkttkwwwwwwk...",
+    "kwkttkkkkwwwk...",
+    "kwwktttttkwwk...",
+    "kwwkttwttkwwk...",
+    "kwwktttttkwwk...",
+    "kwkkkkkttkwwk...",
+    "kwwwwwkttkwwk...",
+    "kwwwwwwkkwwwk...",
+    "kwwwwwwwwwwwk.yk",
+    "kwwwwwwwwwwwkyyk",
+    "kkkkkkkkkkkkkkyk",
+    "..............k."
+  ],
+  settingsCopy: [
+    "kkkkkkkkkk......",
+    "kwwwwwwwwkk.....",
+    "kwbbbbbbwkwk....",
+    "kwwwwwwwwkkkk...",
+    "kwbbbbwwwwwwk...",
+    "kwwwwwwwwwwwk...",
+    "kwbbbbbbbwwwk...",
+    "kwwwwwwwwwwwk...",
+    "kwbbbbbwwwwwk...",
+    "kwwwwwwwwwwwk...",
+    "kwbbbbbbbbwwk...",
+    "kwwwwwwwwwwwk...",
+    "kwwwwwwwwwwwk.yk",
+    "kwwwwwwwwwwwkyyk",
+    "kkkkkkkkkkkkkkyk",
+    "..............k."
+  ],
+  svg: [
+    "................",
+    "kkkkkkkkkkkkkkkk",
+    "kBBBBBBBBBBBBBBk",
+    "kBccccccccccccBk",
+    "kBcrrcccrrcccrBk",
+    "kBrccrcrccrcrcBk",
+    "kBrccrcrccrcrcBk",
+    "kBcrrcccrrcccrBk",
+    "kBccccccccccccBk",
+    "kBBBBBBBBBBBBBBk",
+    "kkkkkkkkkkkkkkkk",
+    "................",
+    ".kkk.k..k..kkk..",
+    "k....k..k.k.....",
+    ".kk...kk..k.kk..",
+    "...k..kk..k..k..",
+  ],
+  dxf: [
+    "................",
+    "kkkkkkkkkkkkkkkk",
+    "kBBBBBBBBBBBBBBk",
+    "kBccccccccccccBk",
+    "kBcrrcccrrcccrBk",
+    "kBrccrcrccrcrcBk",
+    "kBrccrcrccrcrcBk",
+    "kBcrrcccrrcccrBk",
+    "kBccccccccccccBk",
+    "kBBBBBBBBBBBBBBk",
+    "kkkkkkkkkkkkkkkk",
+    "................",
+    "kk..k...k.kkkk..",
+    "k.k..k.k..k.....",
+    "k.k...k...kkk...",
+    "kk...k.k..k.....",
+  ],
+  undo: [
+    "................",
+    "................",
+    "....k...........",
+    "...kk...........",
+    "..kbkkkkkkk.....",
+    ".kbbbbbbbbbk....",
+    "..kbkkkkkkbbk...",
+    "...kk.....kbbk..",
+    "....k......kbk..",
+    "...........kbk..",
+    "...........kbk..",
+    "..........kbbk..",
+    "......kkkkbbk...",
+    "......kbbbbk....",
+    "......kkkkk.....",
+    "................"
+  ],
+  redo: [
+    "................",
+    "................",
+    "...........k....",
+    "...........kk...",
+    ".....kkkkkkkbk..",
+    "....kbbbbbbbbbk.",
+    "...kbbkkkkkkbk..",
+    "..kbbk.....kk...",
+    "..kbk......k....",
+    "..kbk...........",
+    "..kbk...........",
+    "..kbbk..........",
+    "...kbbkkkk......",
+    "....kbbbbk......",
+    ".....kkkkk......",
+    "................"
+  ],
+  ghost: [
+    "................",
+    ".....k.k.k......",
+    "...k.......k....",
+    "................",
+    "..k...kkkk...k..",
+    "....kkwwwwkk....",
+    ".k.kwwwwwwwwk.k.",
+    "...kwwkwwkwwk...",
+    ".k.kwwwwwwwwk.k.",
+    "...kwwwwwwwwk...",
+    "..kwwwwwwwwwwk..",
+    "..kwwwwwwwwwwk..",
+    "..kwkwwkkwwkwk..",
+    "..kk.kk..kk.kk..",
+    "................",
+    "................"
+  ],
+  gear: [
+    "......kkkk......",
+    "......kllk......",
+    "..kk.kkllkk.kk..",
+    "..kllkllllkllk..",
+    "...kllllllllk...",
+    ".kkllllkkllllkk.",
+    "kllllkk..kkllllk",
+    "klllk......klllk",
+    "klllk......klllk",
+    "kllllkk..kkllllk",
+    ".kkllllkkllllkk.",
+    "...kllllllllk...",
+    "..kllkllllkllk..",
+    "..kk.kkllkk.kk..",
+    "......kllk......",
+    "......kkkk......"
+  ],
+  ok: [
+    "................",
+    "................",
+    "..........kk....",
+    ".........kGk....",
+    "........kGGk....",
+    "..kk...kGGk.....",
+    "..kGk.kGGk......",
+    "..kGGkGGk.......",
+    "...kGGGk........",
+    "....kGk.........",
+    ".....k..........",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................"
+  ],
+  warn: [
+    ".......kk.......",
+    "......kyyk......",
+    "......kyyk......",
+    ".....kyyyyk.....",
+    ".....kykkyk.....",
+    "....kyykkyyk....",
+    "....kyykkyyk....",
+    "...kyyykkyyyk...",
+    "...kyyykkyyyk...",
+    "..kyyyykkyyyyk..",
+    "..kyyyyyyyyyyk..",
+    ".kyyyyykkyyyyyk.",
+    ".kyyyyykkyyyyyk.",
+    "kyyyyyyyyyyyyyyk",
+    "kkkkkkkkkkkkkkkk",
+    "................"
+  ],
+  stopSign: [
+    ".....kkkkkk.....",
+    "....krrrrrrk....",
+    "...krrrrrrrrk...",
+    "..krrrrrrrrrrk..",
+    ".krrwwrrrrwwrrk.",
+    "krrrwwwrrwwwrrrk",
+    "krrrrwwwwwwrrrrk",
+    "krrrrrwwwwrrrrrk",
+    "krrrrrwwwwrrrrrk",
+    "krrrrwwwwwwrrrrk",
+    "krrrwwwrrwwwrrrk",
+    ".krrwwrrrrwwrrk.",
+    "..krrrrrrrrrrk..",
+    "...krrrrrrrrk...",
+    "....krrrrrrk....",
+    ".....kkkkkk....."
+  ],
+  info: [
+    ".....kkkkkk.....",
+    "...kkBBBBBBkk...",
+    "..kBBBBwwBBBBk..",
+    ".kBBBBBwwBBBBBk.",
+    ".kBBBBBBBBBBBBk.",
+    "kBBBBBwwwBBBBBBk",
+    "kBBBBBBwwBBBBBBk",
+    "kBBBBBBwwBBBBBBk",
+    "kBBBBBBwwBBBBBBk",
+    "kBBBBBBwwBBBBBBk",
+    ".kBBBBwwwwBBBBk.",
+    ".kBBBBBBBBBBBBk.",
+    "..kBBBBBBBBBBk..",
+    "...kkBBBBBBkk...",
+    ".....kkkkkk.....",
+    "................"
+  ]
+};
+
+// One <rect> per run of same-colored pixels in a row.
+function svgIcon(name, size = 32, title) {
+  const rows = ICONS[name];
+  if (!rows) return "";
+  let rects = "";
+  for (let y = 0; y < 16; y++) {
+    const row = rows[y] || "";
+    let x = 0;
+    while (x < 16) {
+      const ch = row[x] || ".";
+      let w = 1;
+      while (x + w < 16 && (row[x + w] || ".") === ch) w++;
+      if (ch !== "." && PAL[ch]) rects += '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="1" fill="' + PAL[ch] + '"/>';
+      x += w;
+    }
+  }
+  return '<svg class="px-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="' + size + '" height="' + size + '" shape-rendering="crispEdges" aria-hidden="true" focusable="false">' +
+    (title ? "<title>" + title + "</title>" : "") + rects + "</svg>";
+}
+
+function dataUri(name) {
+  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgIcon(name, 16).replace(' class="px-icon"', ""));
+}
+
+module.exports = { ICONS, svgIcon, dataUri };
