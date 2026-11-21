@@ -188,6 +188,60 @@ All of these appear in both copy buttons.
    - Drags follow the same linked rules as typing, so dragging the spacing bar changes the travel exactly as typing a new spacing does.
 7. **Try-these examples.** Buttons that load teaching designs: "Our design (360° = 6 in)", "Half turn", "Lots of pins" (thin plastic warning), "Tiny wheel" (hub screws don't fit), "Steep pin" (taper angle too steep). Each shows its badges and ghost like any edit.
 
+## Locking inputs
+
+Students can lock a number so it stays put, then see what every other number has to do to keep it there. (Added by Luke after phase 4.)
+
+**Which boxes lock:** Wheel turns, Sheet slides, Pins on the wheel, Hole spacing, Push circle (pitch Ø), Wheel size (drum Ø), Hole size, Sheet thickness, Gap under the sheet, and the pin shape boxes (width, height, side slant, tip size, straight part). Hub, drill guide and sheet-file boxes don't interact with anything, so they get no lock.
+
+**How a lock behaves:**
+
+- A padlock button sits beside each lockable box (44 px tap target, tooltip "Lock Sheet slides", `aria-pressed`). A locked box can't be typed in or dragged until it is unlocked.
+- **Held boxes:** when locks together fix a number that isn't locked itself, that box shows a small "held" mark with a tooltip naming the locks, and it can't be edited either. For example, locking Wheel turns and Sheet slides holds Push circle and, with the gap and thickness unchanged, Wheel size. Adding a lock on Pins also holds Hole spacing.
+- **Move something else:** when an edit's normal rule (the linked-fields table above) would change a locked or held number, the planner keeps it and changes the next free number instead. The box that moved gets its badge as usual.
+- **Say what moved and why:** a short note appears beside the edited box, in plain words with the reason. For example: "Sheet slides is locked at 6 in. A 60 mm wheel slides farther per turn. So the wheel now turns 280.3° instead of 360°." The status bar repeats the first sentence. Each lock reason has one short "why" line built from the relation it uses (slide = push circle × π × turn ÷ 360; hole spacing = slide per full turn ÷ pins; tip size and slant are tied by the pin's width and height).
+- **Refuse when nothing can move:** if no free number can absorb the change, the edit doesn't happen. A plain message beside the box names the locks in the way and why: "Can't change Wheel size. Sheet slides and Wheel turns are both locked. Together they fix the wheel size. Unlock one."
+- Pins must stay whole numbers, so the planner never picks "Pins on the wheel" as the number to move.
+- Locks apply the same way to typing, spinner arrows, drag handles and type-in-place. Locked and held dimensions show no drag handle.
+- Try-these examples, loading a saved design and Reset design replace the whole design. The lock buttons stay as they were; a lock holds a box, not a value.
+- Locks are remembered with the current design between visits. They are not part of saved designs or the OpenSCAD file.
+
+**Which number moves instead.** Motion numbers are tied by T_rev = T × 360 / θ = N × P = π × pitch Ø = π × (drum Ø + 2g + t). Try each column left to right and use the first free one:
+
+| Field edited | Normal rule changes | If that is locked or held, change instead | Then |
+| --- | --- | --- | --- |
+| Wheel turns | Wheel size (T_rev) | Sheet slides (keeps T_rev) | refuse |
+| Sheet slides | Wheel size (T_rev) | Wheel turns (keeps T_rev) | refuse |
+| Pins on the wheel | Hole spacing | Wheel turns (keeps spacing and slide) | Sheet slides, then refuse |
+| Hole spacing, Push circle, Wheel size | Sheet slides | Wheel turns | refuse |
+| Sheet thickness or gap | Wheel size | Sheet slides (keeps wheel size) | Wheel turns, then refuse |
+| Pin width, height or straight part | Tip size (slant held) | Side slant (tip held) | refuse |
+| Side slant | Tip size | Pin height | refuse |
+| Tip size | Side slant | Pin height | refuse |
+
+### Choosing what moves
+
+Most edits could be balanced by more than one number. Changing Wheel size, for example, can be balanced by changing Sheet slides or Wheel turns. Students can pick which one.
+
+- **Setting "When a change moves other numbers":** Let me choose · Pick for me (automatic). Default: Let me choose. It goes in the Settings dialog and the View menu, and is remembered like other settings.
+- **Let me choose:** as soon as an edit changes something, a small chooser appears under the edited box. It lists each free number that could move, each with its preview. For Wheel size 46.21 → 60 mm on the default design: "Sheet slides: 6 in → 7.71 in" or "Wheel turns: 360° → 280.3°". The usual choice (the first free column in the table above) is picked already, so ignoring the chooser behaves exactly like automatic.
+- **The choice applies live** and is remembered for the rest of that edit. Typing 1, 18, 180 never asks again on each keystroke. A new edit (focusing another box, a new drag, a button) starts again from the usual choice.
+- **It never blocks or pops up a window.** Locked and held numbers don't appear in the list. If only one number can move, the chooser just says what will move and why. Pins never appear, since they must stay whole.
+- **Pick for me:** no chooser. The planner uses the usual choice and shows the "what moved and why" note.
+- Drag handles and type-in-place follow the same setting; while dragging, the chooser shows next to the drawing's box.
+- Keyboard: the chooser is a group of option buttons, reached with Tab, and arrows change the pick.
+
+The routing and the list of options live in `state/link.js` next to `applyField` (for example a function that returns the free options for an edit, and `applyField` taking the chosen one).
+
+### Pin shape options
+
+Two student-level options in the Pins group (added by Luke after phase 4):
+
+- **Keep the tip round** (check box, default off). With the slant held, a taller pin narrows its tip until it comes to a point: on the default pin, height 4.0 mm would need a −0.53 mm tip. With this box checked, the tip size stays put instead, and the side slant changes. Height 4.0 mm then gives a 17.6° slant with the 2 mm round tip. It works exactly like the Tip size lock (it sets that lock), which matters because Tip size is hidden in Student detail. The pin shape rows in the "Which number moves instead" table then use their second column.
+- **Straight past the sheet** (number box, mm, default 0, shown only while "Straight through the sheet" is picked). It sets how far the full-width part keeps going above the sheet's top before the taper begins: straight part = gap + sheet thickness + this amount. It still follows later changes to the gap and thickness. Negative values end the straight part inside the sheet, down to 0. Typing in the expert Straight part box still makes the shape "custom", as in the linked-fields table.
+- Together they fix a known problem: pressing Straight on the default pin keeps the 28.4° slant and makes a 5.44 mm tip (warning "tip too big"). With Keep the tip round checked, Straight keeps the 2 mm tip and the slant becomes 68.9°.
+- Neither is an OpenSCAD setting; both reach the model through `pin_straight` and `pin_tip_d`. The lock state lives in `state/store.js`, and the padlock buttons go in `ui/inputs.js`.
+
 ## Comparing designs
 
 Use a ghost overlay to see what the last change did, and side-by-side panels to compare saved designs, because designs with different hole spacing don't line up on top of each other.
@@ -230,6 +284,7 @@ A Settings dialog (View menu) holds these choices; they are remembered between v
 | Highlight on hover | On · off | On | Points from a setting to its dimension in the drawings |
 | Hub | goBILDA 32 mm hub · custom | goBILDA | Custom unlocks the hub mount settings below |
 | Turn direction | Clockwise · counterclockwise | Clockwise | Matches how the servo is mounted; only mirrors the drawings and which way the sheet slides |
+| When a change moves other numbers | Let me choose · pick for me (automatic) | Let me choose | Students see every way to balance a change and pick one; automatic hides the chooser |
 
 ## Hub mount settings
 
@@ -353,7 +408,7 @@ Build in this order, ending each phase with tests passing and a screenshot (head
 4. **Student visuals:** turn dial, slide ruler, fit meters, try-these examples, How it works, "?" explainers.
 5. **OpenSCAD export:** Copy OpenSCAD file (sprocket or drill guide), Copy settings only, the paste-into-OpenSCAD help, the sheet SVG and DXF export, and the track box.
 6. **Windows 98 polish:** title bar gradient, beveled controls, segmented progress-bar meters, group boxes, tooltips, status bar, pixel icons.
-7. **Edit in the drawings:** drag handles and type-in-place on top of the phase 2 dimension model.
+7. **Edit in the drawings, and locks:** drag handles and type-in-place on top of the phase 2 dimension model, plus the padlocks from Locking inputs. Both go through the same linked rules, so build the lock routing first and let drags use it.
 8. **Finish:** accessibility, Chromebook and phone checks, README, copy planner.html to a fresh Windows laptop and test it with the internet off.
 
 **Work straight through, no check-ins.** Build all eight phases and hand back the finished product. Whenever you would stop to ask Danielle something, pick the most reasonable answer, keep going, and add an entry to `DECISIONS.md`:
@@ -381,6 +436,11 @@ Hand back only when every check below passes, with test output or a screenshot a
 - [ ] (Danielle, after delivery, using a one-page checklist you write with the expected numbers) on a computer with only OpenSCAD installed and no other files, the copied file renders with the reference sizes (±0.05 mm) and volumes (±1%), and its exported STL opens without errors in PrusaSlicer, Cura or Bambu Studio. The sheet SVG and DXF import into CNC software at true size, with hole spacing and diameter measuring within 0.05 mm.
 - [ ] Copy settings only, pasted over the file, renders the same, and the console numbers (hole spacing, drum Ø, holes needed) match the page. When the clipboard is blocked, the Select all dialog appears.
 - [ ] Dragging the spacing bar changes the travel exactly as typing the same spacing does; type-in-place applies on Enter and cancels on Escape; arrow keys nudge a focused handle.
+- [ ] Locks: lock Sheet slides at 6 in, type Wheel size 60 → the slide stays 6 in and Wheel turns becomes about 280.3°, with a status message saying why. Lock Hole spacing, change Pins 16 → 24 → spacing stays 9.525 and Wheel turns becomes 240°. Lock Wheel turns and Sheet slides, try to change Wheel size → refused with a message naming both locks, and Push circle and Wheel size show as held. Lock Tip size, change Pin width 4.0 → 4.4 → tip stays 2.00 and Side slant becomes about 32.4°. A locked box has no drag handle.
+- [ ] Locks explain themselves: each re-routed edit shows a note beside the box saying what moved and why, in short plain sentences, and the status bar repeats the first sentence.
+- [ ] Choosing what moves: with "Let me choose", changing Wheel size 46.21 → 60 shows a chooser offering "Sheet slides: 6 in → 7.71 in" (picked) and "Wheel turns: 360° → 280.3°". Picking Wheel turns applies live, and typing more digits keeps that pick. A locked number never appears as an option. With "Pick for me" no chooser appears and the result matches the usual rule.
+- [ ] Pin options: with Keep the tip round checked, Pin height 2.6 → 4.0 keeps the 2.00 mm tip and the slant becomes 17.6° (unchecked, the pin comes to a point). With Straight through the sheet picked, Straight past the sheet 0.5 sets the straight part to gap + thickness + 0.5 (2.4 mm on the default), and it still follows later changes to the thickness.
+- [ ] Close-up stays readable at 1366 × 768 for 8 to 40 pins and after any edit: labels and badges never cover the pins or the holes where they meet. Checked the same way for every drawing, at 1366 × 768 and 390 px.
 - [ ] On a Windows laptop with the internet off, double-clicking planner.html opens it in Chrome with everything working, including copying. Reloading keeps the current design, saved designs and settings. With storage blocked, the page still works and says designs won't be remembered.
 - [ ] At 1366 × 768 and 390 px wide: no sideways scroll, no clipped labels, every drawing readable. The Windows 98 theme reads clearly at normal laptop sizes.
 - [ ] (Danielle, after delivery) Usability check with one 7th grader: without help, they can say how much bigger the wheel gets for a half turn, what goes wrong with 24 pins, and what the pitch diameter is.
