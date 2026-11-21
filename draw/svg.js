@@ -243,7 +243,28 @@ function fit(widthPx, build, opts = {}) {
     if (Math.abs(next - scale) / scale < 0.015) { scale = next; break; }
     scale = next;
   }
-  return sk;
+  // The last pass may still come out wider (or taller) than allowed, and the
+  // browser would then shrink the whole drawing, labels too (under 13 px).
+  // Rebuild a little smaller until it fits at its real size.
+  const over = s => {
+    const padMm = (opts.padPx || 8) / s.s;
+    const wPx = ((s.bb[2] - s.bb[0]) + 2 * padMm) * s.s;
+    const hPx = ((s.bb[3] - s.bb[1]) + 2 * padMm) * s.s;
+    return Math.max(wPx / widthPx, opts.maxHeightPx ? hPx / opts.maxHeightPx : 0);
+  };
+  // If the labels alone are wider than the box, shrinking can't help: stop
+  // as soon as a step doesn't improve the fit and keep the best one.
+  let best = sk, bestR = sk ? over(sk) : 1;
+  for (let k = 0; k < 8 && bestR > 1.002; k++) {
+    // labels don't shrink with the scale, so step the scale down a bit further than the ratio
+    scale = best.s / (1 + (bestR - 1) * 1.6);
+    const next = new Sketch({ scale, dir: opts.dir || 1, fontPx: opts.fontPx || 14, id: opts.id });
+    build(next);
+    const r = over(next);
+    if (r > bestR - 0.002) break;
+    best = next; bestR = r;
+  }
+  return best;
 }
 
 module.exports = { Sketch, fit, textWidth, esc, n, attrs, FONT, D2R };

@@ -23,12 +23,12 @@ function build(sk, vm) {
   const inches = Math.max(1, Math.ceil(maxT / IN - 1e-6));
   const L = inches * IN;
   // ruler body with tick marks every 1/4 inch
-  const top = 7;
+  const top = Math.max(7, sk.px(32)); // tall enough for the inch numbers under the ticks
   sk.rect(0, 0, L, top, "ruler-body");
   for (let q = 0; q <= inches * 4; q++) {
-    const x = q * IN / 4, len = q % 4 === 0 ? 3.2 : q % 2 === 0 ? 2.1 : 1.3;
+    const x = q * IN / 4, len = top * (q % 4 === 0 ? 0.42 : q % 2 === 0 ? 0.28 : 0.17);
     sk.line(x, top, x, top - len, "ruler-tick", { noGrow: true });
-    if (q % 4 === 0 && (inches <= 24 || (q / 4) % 2 === 0)) sk.text(x + (q === 0 ? sk.px(3) : 0), top - 3.4, String(q / 4), { anchor: q === 0 ? "start" : "middle", v: "top", px: 13, cls: "ruler-n" });
+    if (q % 4 === 0 && (inches <= 24 || (q / 4) % 2 === 0)) sk.text(x + (q === 0 ? sk.px(3) : 0), top * 0.52, String(q / 4), { anchor: q === 0 ? "start" : "middle", v: "top", px: 13, cls: "ruler-n" });
   }
   sk.text(L, top + sk.px(4), "inches", { anchor: "end", v: "bottom", px: 13, cls: "note" });
   // Each bar has its name and numbers on a line above it, so the bars can

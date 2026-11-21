@@ -35,3 +35,19 @@ window.__labelHits = function () {
   }
   return hits;
 };
+
+// Drawing labels that cover each other (more than 2 px each way).
+window.__labelClashes = function () {
+  const out = [];
+  for (const svg of document.querySelectorAll("svg.drw")) {
+    if (!svg.checkVisibility()) continue;
+    const ts = [...svg.querySelectorAll("text.lbl")].filter(t => !t.closest(".ghost") && t.checkVisibility() && t.textContent.trim())
+      .map(t => ({ t, r: t.getBoundingClientRect() })).filter(x => x.r.width > 2);
+    for (let i = 0; i < ts.length; i++) for (let j = i + 1; j < ts.length; j++) {
+      const a = ts[i].r, b = ts[j].r;
+      const ox = Math.min(a.right, b.right) - Math.max(a.left, b.left), oy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      if (ox > 2 && oy > 0.3 * Math.min(a.height, b.height)) out.push((svg.classList[1] || "svg") + ': "' + ts[i].t.textContent.trim().slice(0, 28) + '" / "' + ts[j].t.textContent.trim().slice(0, 28) + '"');
+    }
+  }
+  return out;
+};

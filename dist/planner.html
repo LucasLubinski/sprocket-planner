@@ -482,6 +482,11 @@ svg.panel .endmark { stroke: var(--follow); stroke-width: 1px; stroke-dasharray:
   /* 98.css pins the radio circle to the label's top; center it in the taller label */
   input[type=radio] + label::before { top: calc(50% - 6px); }
   input[type=radio]:checked + label::after { top: calc(50% - 2px); }
+  .menu-btn { min-width: 44px; justify-content: center; }
+  .try-box .try button, .try button { min-height: 44px; }
+  input[type=checkbox] + label, input[type=radio] + label { min-width: 44px; }
+  .settings menu[role=tablist] > li > a { margin: 0; padding: 0 12px; min-height: 44px; display: flex; align-items: center; }
+  .dialog input[type=text] { height: 44px; }
   .playbar input[type=range] { height: 44px; }
   .unit-switch button { min-width: 48px; }
 }
@@ -2153,7 +2158,8 @@ function render(container, vm) {
   }
   out.push('<rect class="frame" x="' + ml + '" y="' + mt + '" width="' + pw + '" height="' + ph + '"/>');
   out.push('<line class="zero" x1="' + ml + '" x2="' + (ml + pw) + '" y1="' + n(Y(0)) + '" y2="' + n(Y(0)) + '"/>');
-  lbl(ml + pw - 4, Y(0) + 16, vm.word("hits", "binds"), "end", "zone-t");
+  // inside the red zone when it has room, else just above the zero line
+  lbl(ml + pw - 4, Y(ymin) - Y(0) >= 20 ? Y(0) + 16 : Y(0) - 5, vm.word("hits", "binds"), "end", "zone-t");
   lbl(ml + 6, mt + ph + 36, esc(vm.word("Wheel angle within one pin step", "Rotation within one pin step") + " (" + vm.fmt("step", step) + "°)"), "start", "axis-t");
   out.push('<text class="lbl axis-t" font-size="14" text-anchor="middle" transform="rotate(-90 14 ' + n(mt + ph / 2) + ')" x="14" y="' + n(mt + ph / 2 + 5) + '">' + esc(vm.word("squeeze room, mm", "clearance, mm")) + "</text>");
   // ghost traces
@@ -2315,7 +2321,7 @@ function animate(svg, vm, theta, sk) {
 
   const sub = new Sketch({ scale: sk.s, dir, fontPx: sk.fontPx, id: "cu-g" });
   const ln = lanes(sk, v, vm);
-  const label = none ? "holes run together: no plastic between them" : (g.d <= 0 ? vm.word("hits! overlap ", "binding: overlap ") + vm.fmt("tight", -g.d) : vm.word("squeeze room ", "clearance ") + vm.fmt("tight", g.d)) + " mm";
+  const label = none ? "holes overlap: no plastic left" : (g.d <= 0 ? vm.word("hits! overlap ", "binding: overlap ") + vm.fmt("tight", -g.d) : vm.word("squeeze room ", "clearance ") + vm.fmt("tight", g.d)) + " mm";
   // The squeeze-room label stays put in the lane under the frame (it doesn't
   // jump around while the wheel turns); a leader runs to the gap.
   const lw = labelW(sub, label), lx = clampCenter(0, lw, ln.botFree, v.x1);
@@ -2434,9 +2440,9 @@ function build(sk, vm) {
   sk.close();
   // the number in the middle
   sk.circle(0, 0, R * 0.42, "dial-hub", { noGrow: true });
-  sk.text(0, R * 0.05, F.trim(theta, 2) + "°", { v: "mid", px: 20, bold: true, cls: "dial-num", a: { "data-key": "rotation" } });
+  sk.text(0, sk.px(6), F.trim(theta, 2) + "°", { v: "mid", px: 20, bold: true, cls: "dial-num", a: { "data-key": "rotation" } });
   const turns = theta / 360;
-  sk.text(0, -R * 0.24, turns > 1.0001 ? F.trim(turns, 2) + " turns" + (more ? "+" : "") : turns > 0.999 ? "1 full turn" : "of a turn", { v: "mid", px: 13, cls: "dial-sub" });
+  sk.text(0, -sk.px(13), turns > 1.0001 ? F.trim(turns, 2) + " turns" + (more ? "+" : "") : turns > 0.999 ? "1 full turn" : "of a turn", { v: "mid", px: 13, cls: "dial-sub" });
   const b = vm.badge("rotation");
   let ly = -outer - sk.px(4);
   if (b) { sk.text(0, ly, "", { v: "top", px: 14, badge: b, anchor: "middle" }); ly -= sk.px(19); }
@@ -2609,19 +2615,16 @@ function build(sk, vm) {
   const colX = R + sk.px(18);
   const gapY = sk.fs * 1.45;
   labels.sort((a, b) => b.from[1] - a.from[1]);
-  let prev = R + gapY * 0.5;
+  // Top row sits under the bolt-square label; the column may run on below
+  // the wheel (the cut view then starts lower) rather than crowd upward.
+  let prev = R - sk.fs * 0.4;
   for (const L1 of labels) { L1.y = Math.min(L1.from[1], prev - gapY); prev = L1.y; }
-  // if the stack ran off the bottom, push it back up
-  const floor = -R + sk.fs * 0.5;
-  for (let i = labels.length - 1; i >= 0; i--) {
-    const below = i === labels.length - 1 ? floor - gapY : labels[i + 1].y;
-    labels[i].y = Math.max(labels[i].y, below + gapY);
-  }
+  const lowest = labels.length ? labels[labels.length - 1].y - sk.fs * 0.6 : -R;
   for (const L1 of labels) {
     sk.leader(L1.from, [colX, L1.y], { key: L1.key, level: L1.level, label: L1.text, badge: vm.badge(L1.key) });
   }
 
-  edgeView(sk, vm, -R - sk.px(26) - sk.fs * 1.6);
+  edgeView(sk, vm, Math.min(-R, lowest) - sk.px(26) - sk.fs * 2.9);
 }
 
 // Cut through two opposite bolt holes. z is up (hub side up).
@@ -2631,7 +2634,9 @@ function edgeView(sk, vm, top) {
   const z0 = top - hz;
   const Z = z => z0 + z;
   const r0 = d.r0, br = d.boltR, slab = p.pinFlat * p.pinW;
-  sk.text(0, Z(hz) + sk.px(8), vm.word("Cut through two bolt holes (hub side up)", "Section through the bolt holes (hub side up)"), { v: "bottom", cls: "note", px: 13 });
+  // rows above the part: the title, then the pilot ring label
+  const pilotRow = Z(hz) + sk.px(8);
+  sk.text(0, pilotRow + sk.fs * 1.3, vm.word("Cut through two bolt holes (hub side up)", "Section through the bolt holes (hub side up)"), { v: "bottom", cls: "note", px: 13 });
   sk.rect(-r0, Z(0), r0, Z(p.drumW), "d part drum", { "data-key": "drumW drumD" });
   for (const sx of [-1, 1]) sk.rect(sx * r0, Z(0), sx * (r0 + p.pinH), Z(slab), "d part pin", { "data-key": "pinFlat pinH pinW" });
   if (p.pilot) sk.rect(-p.pilotD / 2, Z(p.drumW), p.pilotD / 2, Z(p.drumW + p.pilotH), "d part pilot-e", { "data-key": "pilotH pilotD pilot" });
@@ -2641,17 +2646,21 @@ function edgeView(sk, vm, top) {
     if (p.counterbore > 0) sk.rect(sx * br - p.boltHeadD / 2, Z(-0.01), sx * br + p.boltHeadD / 2, Z(Math.min(p.counterbore, p.drumW)), "d part cut", { "data-key": "counterbore boltHeadD" });
   }
   sk.linear([-r0 - p.pinH, Z(0)], [-r0 - p.pinH, Z(p.drumW)], [-sk.px(12), 0], { key: "drumW", level: "key", label: vm.word("thickness ", "drum_w ") + vm.num("drumW"), badge: vm.badge("drumW"), anchor: "end" });
-  sk.linear([r0 + p.pinH, Z(0)], [r0 + p.pinH, Z(slab)], [sk.px(12), 0], { key: "pinFlat", level: "all", label: "pin " + vm.fmt("slab", slab) + " thick (" + vm.num("pinFlat") + " × width)", badge: vm.badge("slab"), anchor: "start" });
+  // pin thickness label: beside the pin, but never up in the pilot row
+  const pinY = Math.min(Z(slab / 2), pilotRow - sk.fs * 1.25);
+  sk.linear([r0 + p.pinH, Z(0)], [r0 + p.pinH, Z(slab)], [sk.px(12), 0], { key: "pinFlat", level: "all", label: "pin " + vm.fmt("slab", slab) + " thick (" + vm.num("pinFlat") + " × width)", badge: vm.badge("slab"), anchor: "start", dy: pinY - Z(slab / 2) });
   if (p.pilot) {
     const dd = sk.dim({ key: "pilotH", level: "all", kind: "length" });
     sk.open(sk.groupFor(dd));
-    sk.line(p.pilotD / 2, Z(p.drumW + p.pilotH), r0 + p.pinH + sk.px(10), Z(hz) + sk.px(8), "dl");
-    dd.labelBox = sk.text(r0 + p.pinH + sk.px(13), Z(hz) + sk.px(8), vm.word("pilot ring ", "pilot ") + vm.num("pilotH") + " tall", { anchor: "start", v: "mid", badge: vm.badge("pilotH"), a: { "data-dim-label": dd.id } });
+    sk.line(p.pilotD / 2, Z(p.drumW + p.pilotH), r0 + p.pinH + sk.px(10), pilotRow, "dl");
+    dd.labelBox = sk.text(r0 + p.pinH + sk.px(13), pilotRow, vm.word("pilot ring ", "pilot ") + vm.num("pilotH") + " tall", { anchor: "start", v: "mid", badge: vm.badge("pilotH"), a: { "data-dim-label": dd.id } });
     sk.close();
   }
   const dd = sk.dim({ key: "counterbore", level: "key", kind: "length" });
   sk.open(sk.groupFor(dd));
-  sk.text(0, Z(0) - sk.px(6), (p.counterbore > 0 ? "counterbore " + vm.num("counterbore") : vm.word("no counterbore", "counterbore 0")) +
+  // under the part, and under the side labels that hang below it
+  const cbY = Math.min(Z(0) - sk.px(6), Z(p.drumW / 2) - sk.fs * 0.75 - sk.px(4), pinY - sk.fs * 0.75 - sk.px(4));
+  sk.text(0, cbY, (p.counterbore > 0 ? "counterbore " + vm.num("counterbore") : vm.word("no counterbore", "counterbore 0")) +
     " · " + (isFinite(m.v.screwL) ? "screws: 4 × M4 × " + m.v.screwL + " mm" : "no screw is long enough"), { anchor: "middle", v: "top", badge: vm.badge("counterbore"), a: { "data-dim-label": dd.id } });
   sk.close();
 }
@@ -2945,7 +2954,7 @@ defs["draw/pinhole.js"] = { map: {"../core/taper.js":"core/taper.js","./svg.js":
 // pin width, straight section, taper angle, height, tip Ø and the play on each
 // side. Ghost pin and hole edges line up on the hole center.
 const T = require("../core/taper.js");
-const { D2R } = require("./svg.js");
+const { D2R, textWidth } = require("./svg.js");
 
 function pinPts(sk, loc) { return "M" + loc.map(([x, y]) => sk.P(x, y)).join("L") + "Z"; }
 
@@ -3087,7 +3096,11 @@ function build(sk, vm) {
     });
     sk.close();
   }
-  sk.text(X + sk.px(4), base / 2, vm.word("wheel", "drum"), { anchor: "start", v: "mid", cls: "note", px: 13 });
+  // "wheel" note inside the drum strip, on whichever side has room beside the pin
+  {
+    const word = vm.word("wheel", "drum"), w = textWidth(word, 13) / sk.s, room = X - a - sk.px(8);
+    if (w <= room && sk.px(14) <= -base + 0.05) sk.text(X - sk.px(3), base / 2, word, { anchor: "end", v: "mid", cls: "note", px: 13 });
+  }
 }
 
 module.exports = { id: "pinhole", build, clipBase, fitOpts: () => ({ maxHeightPx: 460, maxScale: 70 }) };
@@ -3119,12 +3132,12 @@ function build(sk, vm) {
   const inches = Math.max(1, Math.ceil(maxT / IN - 1e-6));
   const L = inches * IN;
   // ruler body with tick marks every 1/4 inch
-  const top = 7;
+  const top = Math.max(7, sk.px(32)); // tall enough for the inch numbers under the ticks
   sk.rect(0, 0, L, top, "ruler-body");
   for (let q = 0; q <= inches * 4; q++) {
-    const x = q * IN / 4, len = q % 4 === 0 ? 3.2 : q % 2 === 0 ? 2.1 : 1.3;
+    const x = q * IN / 4, len = top * (q % 4 === 0 ? 0.42 : q % 2 === 0 ? 0.28 : 0.17);
     sk.line(x, top, x, top - len, "ruler-tick", { noGrow: true });
-    if (q % 4 === 0 && (inches <= 24 || (q / 4) % 2 === 0)) sk.text(x + (q === 0 ? sk.px(3) : 0), top - 3.4, String(q / 4), { anchor: q === 0 ? "start" : "middle", v: "top", px: 13, cls: "ruler-n" });
+    if (q % 4 === 0 && (inches <= 24 || (q / 4) % 2 === 0)) sk.text(x + (q === 0 ? sk.px(3) : 0), top * 0.52, String(q / 4), { anchor: q === 0 ? "start" : "middle", v: "top", px: 13, cls: "ruler-n" });
   }
   sk.text(L, top + sk.px(4), "inches", { anchor: "end", v: "bottom", px: 13, cls: "note" });
   // Each bar has its name and numbers on a line above it, so the bars can
@@ -3208,18 +3221,18 @@ function build(sk, vm) {
     editable: true, value: L, drag: { type: "axis", origin: [0, 0], axis: [1, 0], factor: 1 }, handle: [L, -sk.px(14)], step: 1, bigStep: 10
   });
   sk.linear([L, 0], [L, W], [sk.px(14), 0], {
-    key: "sheetW", level: "key", label: vm.word("width ", "width ") + vm.num("sheetW"), badge: vm.badge("sheetW"), anchor: "start",
+    key: "sheetW", level: "key", label: vm.word("width ", "width ") + vm.num("sheetW"), badge: vm.badge("sheetW"), rot: true,
     editable: true, value: W, drag: { type: "axis", origin: [0, 0], axis: [0, 1], factor: 1 }, handle: [L + sk.px(14), W], step: 1, bigStep: 5
   });
   sk.linear([0, 0], [0, s.rowY], [-sk.px(14), 0], {
-    key: "rowOffset", level: "all", label: vm.word("row ", "row ") + vm.num("rowOffset"), badge: vm.badge("rowOffset"), anchor: "end",
+    key: "rowOffset", level: "all", label: vm.word("row ", "row ") + vm.num("rowOffset"), badge: vm.badge("rowOffset"), rot: true,
     editable: true, value: s.rowY, drag: { type: "axis", origin: [0, 0], axis: [0, 1], factor: 1 }, handle: [-sk.px(14), s.rowY], step: 0.5, bigStep: 2
   });
   if (s.endGap > sk.px(30)) sk.linear([0, s.rowY], [h0.x - h, s.rowY], [0, -h - sk.px(8)], { key: "endMargin", level: "all", label: vm.word("end ", "end ") + vm.fmt("endMargin", s.endGap), badge: null, ext: false });
   sk.text(L / 2, W / 2 + h + sk.px(6), s.n + " holes", { v: "bottom", cls: "note", px: 13 });
 
   // drill guide, same scale, below
-  const gy = -lane * 2.6 - 4 - (p.edgeOffset + h + 6);
+  const gy = -lane * 3.6 - 4 - (p.edgeOffset + h + 6);
   guide(sk, vm, gy);
 }
 
@@ -3228,12 +3241,13 @@ function guide(sk, vm, oy) {
   const margin = 6, n = d.nGuide;
   const len = (n - 1) * d.P + 2 * margin, width = p.edgeOffset + p.holeD / 2 + margin, fence = 4;
   const Y = y => oy + y;
-  sk.text(0, Y(width) + sk.px(6), vm.word("Drill guide (lay it on the sheet, fence on the edge)", "Drill guide, top view"), { anchor: "start", v: "bottom", cls: "note", px: 13 });
+  // caption on its own row above the guide-hole label
+  sk.text(0, Y(width) + sk.fs * 2.2 + sk.px(6), vm.word("Drill guide: fence on the sheet edge", "Drill guide, top view"), { anchor: "start", v: "bottom", cls: "note", px: 13 });
   sk.rect(0, Y(0), len, Y(width), "d part guide", { "data-key": "guideT guideHoles" });
   sk.rect(0, Y(-fence), len, Y(0), "d part fence", { "data-key": "edgeOffset" });
   for (let k = 0; k < n; k++) sk.circle(margin + k * d.P, Y(p.edgeOffset), p.guideHoleD / 2, "d part hole-o", { "data-key": "guideHoleD guideHoles" });
   sk.linear([0, Y(-fence)], [len, Y(-fence)], [0, -sk.px(12)], { key: "guideHoles", level: "key", label: n + " holes, " + vm.fmt("guideLen", d.guideLen) + " long · " + vm.num("guideT") + " thick", badge: vm.badge("nGuide") });
-  sk.linear([len, Y(0)], [len, Y(p.edgeOffset)], [sk.px(14), 0], { key: "edgeOffset", level: "all", label: vm.word("edge to holes ", "edge offset ") + vm.num("edgeOffset"), badge: vm.badge("edgeOffset"), anchor: "start" });
+  sk.linear([len, Y(0)], [len, Y(p.edgeOffset)], [sk.px(14), 0], { key: "edgeOffset", level: "all", label: vm.word("edge to holes ", "edge offset ") + vm.num("edgeOffset"), badge: vm.badge("edgeOffset"), rot: true });
   sk.leader([margin + d.P + p.guideHoleD / 2 * 0.7, Y(p.edgeOffset + p.guideHoleD / 2 * 0.7)], [margin + d.P * 2.2, Y(width) + sk.fs * 1.4], { key: "guideHoleD", level: "all", label: vm.word("guide hole Ø", "guide hole Ø") + vm.num("guideHoleD"), badge: vm.badge("guideHoleD") });
 }
 
@@ -3486,7 +3500,28 @@ function fit(widthPx, build, opts = {}) {
     if (Math.abs(next - scale) / scale < 0.015) { scale = next; break; }
     scale = next;
   }
-  return sk;
+  // The last pass may still come out wider (or taller) than allowed, and the
+  // browser would then shrink the whole drawing, labels too (under 13 px).
+  // Rebuild a little smaller until it fits at its real size.
+  const over = s => {
+    const padMm = (opts.padPx || 8) / s.s;
+    const wPx = ((s.bb[2] - s.bb[0]) + 2 * padMm) * s.s;
+    const hPx = ((s.bb[3] - s.bb[1]) + 2 * padMm) * s.s;
+    return Math.max(wPx / widthPx, opts.maxHeightPx ? hPx / opts.maxHeightPx : 0);
+  };
+  // If the labels alone are wider than the box, shrinking can't help: stop
+  // as soon as a step doesn't improve the fit and keep the best one.
+  let best = sk, bestR = sk ? over(sk) : 1;
+  for (let k = 0; k < 8 && bestR > 1.002; k++) {
+    // labels don't shrink with the scale, so step the scale down a bit further than the ratio
+    scale = best.s / (1 + (bestR - 1) * 1.6);
+    const next = new Sketch({ scale, dir: opts.dir || 1, fontPx: opts.fontPx || 14, id: opts.id });
+    build(next);
+    const r = over(next);
+    if (r > bestR - 0.002) break;
+    best = next; bestR = r;
+  }
+  return best;
 }
 
 module.exports = { Sketch, fit, textWidth, esc, n, attrs, FONT, D2R };
@@ -3527,7 +3562,7 @@ function build(sk, vm) {
 
   // dimensions
   sk.linear([rowX, 0], [rowX, yb], [-(rowX + wall + sk.px(18)), 0], {
-    key: "yb", level: "key", label: vm.word("shaft to sheet ", "axis to sheet ") + vm.num("yb"), badge: vm.badge("yb"), anchor: "end"
+    key: "yb", level: "key", label: vm.word("shaft to sheet ", "axis to sheet ") + vm.num("yb"), badge: vm.badge("yb"), rot: true
   });
   sk.linear([slotW + wall, y0], [slotW + wall, y1], [sk.px(14), 0], {
     key: "trackClearT slotH", level: "key", label: vm.word("slot height ", "slot height ") + vm.num("slotH"), badge: vm.badge("slotH"), anchor: "start"

@@ -3,7 +3,7 @@
 // pin width, straight section, taper angle, height, tip Ø and the play on each
 // side. Ghost pin and hole edges line up on the hole center.
 const T = require("../core/taper.js");
-const { D2R } = require("./svg.js");
+const { D2R, textWidth } = require("./svg.js");
 
 function pinPts(sk, loc) { return "M" + loc.map(([x, y]) => sk.P(x, y)).join("L") + "Z"; }
 
@@ -145,7 +145,11 @@ function build(sk, vm) {
     });
     sk.close();
   }
-  sk.text(X + sk.px(4), base / 2, vm.word("wheel", "drum"), { anchor: "start", v: "mid", cls: "note", px: 13 });
+  // "wheel" note inside the drum strip, on whichever side has room beside the pin
+  {
+    const word = vm.word("wheel", "drum"), w = textWidth(word, 13) / sk.s, room = X - a - sk.px(8);
+    if (w <= room && sk.px(14) <= -base + 0.05) sk.text(X - sk.px(3), base / 2, word, { anchor: "end", v: "mid", cls: "note", px: 13 });
+  }
 }
 
 module.exports = { id: "pinhole", build, clipBase, fitOpts: () => ({ maxHeightPx: 460, maxScale: 70 }) };

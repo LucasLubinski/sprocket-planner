@@ -13,6 +13,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const URL = pathToFileURL(path.join(ROOT, "dist", "planner.html")).href;
 const chrome = findChrome();
 const OVERLAP = fs.readFileSync(path.join(ROOT, "tools", "overlap.js"), "utf8");
+const AUDIT = fs.readFileSync(path.join(ROOT, "tools", "audit.js"), "utf8");
 
 // Helpers that run inside the page.
 const HELPERS = `
@@ -377,7 +378,50 @@ test("planner UI in headless Chrome", { skip: !chrome && "Chrome not found", tim
       assert.equal(await ev(`__t.badge("drumD")`), "▲ +48.51");
     });
 
-    await t.test("drawing labels never cover a pin or a hole (8 to 40 pins, 1366 and 390 px)", async () => {
+    // ---------------- Windows 98 look, readable sizes (phase 6) ----------------
+    await t.test("no text under 13 px, tap targets 44 px on touch screens, also in menus and dialogs", async () => {
+      const found = [];
+      for (const [w, h] of [[1366, 768], [390, 844]]) {
+        await fresh(w, h);
+        await ev(AUDIT + "; 1");
+        const touch = await ev(`matchMedia("(any-pointer: coarse)").matches`);
+        const steps = [
+          ["student", ""],
+          ["expert", `__t.sp().store.setSettings({ detail: "expert", dimLabels: "all" }); __t.sp().store.setField("hub", "custom")`],
+          ["high contrast", `__t.sp().store.setSettings({ scheme: "contrast" })`],
+          ["Export menu", `__t.sp().store.setSettings({ scheme: "standard" }); document.dispatchEvent(new KeyboardEvent("keydown", { key: "e", altKey: true, bubbles: true }))`],
+          ["Settings", `document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); __t.sp().run("settings")`]
+        ];
+        for (const [name, setup] of steps) {
+          const r = await ev(`(async () => { ${setup}; await new Promise(r => setTimeout(r, 120)); return __audit({ touch: ${touch} }); })()`);
+          for (const x of r) found.push(w + " px, " + name + ": " + x);
+        }
+        await ev(`document.querySelectorAll(".dialog, .dlg-backdrop").forEach(d => d.remove()); 1`);
+      }
+      assert.deepEqual(found, []);
+    });
+
+    await t.test("Alt+E opens the Export menu; toolbar tooltips are Windows yellow", async () => {
+      await fresh();
+      const r = await ev(`(async () => {
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "e", altKey: true, bubbles: true }));
+        await __t.settle();
+        const menu = [...document.querySelectorAll("[role=menu]")].find(m => m.checkVisibility());
+        const items = menu ? [...menu.querySelectorAll("[role=menuitem], [role=menuitemradio]")].map(i => i.textContent.trim()) : [];
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        const b = document.querySelector('.tb-btn[aria-label="Save design"]') || document.querySelector(".tb-btn");
+        b.focus(); await new Promise(r => setTimeout(r, 600));
+        const tip = document.querySelector("#tooltip");
+        const out = { items, tipShown: !tip.hidden, bg: getComputedStyle(tip).backgroundColor, text: tip.textContent };
+        b.blur();
+        return out;
+      })()`);
+      assert.ok(r.items.some(t => /Copy OpenSCAD file/.test(t)), "Export menu items: " + r.items.join(", "));
+      assert.ok(r.tipShown);
+      assert.equal(r.bg, "rgb(255, 255, 225)");
+    });
+
+    await t.test("drawing labels never cover a pin, a hole or each other (8 to 40 pins, 1366 and 390 px)", async () => {
       const found = [];
       for (const [w, h] of [[1366, 768], [390, 844]]) {
         await fresh(w, h);
@@ -390,7 +434,7 @@ test("planner UI in headless Chrome", { skip: !chrome && "Chrome not found", tim
             st.beginEdit(); st.setField("teeth", ${teeth}); sp.renderNow();
             await __t.settle();
             const step = 360 / ${teeth}, all = [];
-            for (const f of [0, 0.25, 0.5, 0.75]) { sp.turnTo(step * f); for (const x of __labelHits()) all.push(x); }
+            for (const f of [0, 0.25, 0.5, 0.75]) { sp.turnTo(step * f); for (const x of __labelHits().concat(__labelClashes())) all.push(x); }
             sp.turnTo(0);
             return [...new Set(all)];
           })()`);

@@ -52,7 +52,8 @@ function render(container, vm) {
   }
   out.push('<rect class="frame" x="' + ml + '" y="' + mt + '" width="' + pw + '" height="' + ph + '"/>');
   out.push('<line class="zero" x1="' + ml + '" x2="' + (ml + pw) + '" y1="' + n(Y(0)) + '" y2="' + n(Y(0)) + '"/>');
-  lbl(ml + pw - 4, Y(0) + 16, vm.word("hits", "binds"), "end", "zone-t");
+  // inside the red zone when it has room, else just above the zero line
+  lbl(ml + pw - 4, Y(ymin) - Y(0) >= 20 ? Y(0) + 16 : Y(0) - 5, vm.word("hits", "binds"), "end", "zone-t");
   lbl(ml + 6, mt + ph + 36, esc(vm.word("Wheel angle within one pin step", "Rotation within one pin step") + " (" + vm.fmt("step", step) + "°)"), "start", "axis-t");
   out.push('<text class="lbl axis-t" font-size="14" text-anchor="middle" transform="rotate(-90 14 ' + n(mt + ph / 2) + ')" x="14" y="' + n(mt + ph / 2 + 5) + '">' + esc(vm.word("squeeze room, mm", "clearance, mm")) + "</text>");
   // ghost traces

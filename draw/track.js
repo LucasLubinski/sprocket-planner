@@ -32,7 +32,7 @@ function build(sk, vm) {
 
   // dimensions
   sk.linear([rowX, 0], [rowX, yb], [-(rowX + wall + sk.px(18)), 0], {
-    key: "yb", level: "key", label: vm.word("shaft to sheet ", "axis to sheet ") + vm.num("yb"), badge: vm.badge("yb"), anchor: "end"
+    key: "yb", level: "key", label: vm.word("shaft to sheet ", "axis to sheet ") + vm.num("yb"), badge: vm.badge("yb"), rot: true
   });
   sk.linear([slotW + wall, y0], [slotW + wall, y1], [sk.px(14), 0], {
     key: "trackClearT slotH", level: "key", label: vm.word("slot height ", "slot height ") + vm.num("slotH"), badge: vm.badge("slotH"), anchor: "start"

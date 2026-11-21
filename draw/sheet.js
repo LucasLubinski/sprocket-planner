@@ -34,18 +34,18 @@ function build(sk, vm) {
     editable: true, value: L, drag: { type: "axis", origin: [0, 0], axis: [1, 0], factor: 1 }, handle: [L, -sk.px(14)], step: 1, bigStep: 10
   });
   sk.linear([L, 0], [L, W], [sk.px(14), 0], {
-    key: "sheetW", level: "key", label: vm.word("width ", "width ") + vm.num("sheetW"), badge: vm.badge("sheetW"), anchor: "start",
+    key: "sheetW", level: "key", label: vm.word("width ", "width ") + vm.num("sheetW"), badge: vm.badge("sheetW"), rot: true,
     editable: true, value: W, drag: { type: "axis", origin: [0, 0], axis: [0, 1], factor: 1 }, handle: [L + sk.px(14), W], step: 1, bigStep: 5
   });
   sk.linear([0, 0], [0, s.rowY], [-sk.px(14), 0], {
-    key: "rowOffset", level: "all", label: vm.word("row ", "row ") + vm.num("rowOffset"), badge: vm.badge("rowOffset"), anchor: "end",
+    key: "rowOffset", level: "all", label: vm.word("row ", "row ") + vm.num("rowOffset"), badge: vm.badge("rowOffset"), rot: true,
     editable: true, value: s.rowY, drag: { type: "axis", origin: [0, 0], axis: [0, 1], factor: 1 }, handle: [-sk.px(14), s.rowY], step: 0.5, bigStep: 2
   });
   if (s.endGap > sk.px(30)) sk.linear([0, s.rowY], [h0.x - h, s.rowY], [0, -h - sk.px(8)], { key: "endMargin", level: "all", label: vm.word("end ", "end ") + vm.fmt("endMargin", s.endGap), badge: null, ext: false });
   sk.text(L / 2, W / 2 + h + sk.px(6), s.n + " holes", { v: "bottom", cls: "note", px: 13 });
 
   // drill guide, same scale, below
-  const gy = -lane * 2.6 - 4 - (p.edgeOffset + h + 6);
+  const gy = -lane * 3.6 - 4 - (p.edgeOffset + h + 6);
   guide(sk, vm, gy);
 }
 
@@ -54,12 +54,13 @@ function guide(sk, vm, oy) {
   const margin = 6, n = d.nGuide;
   const len = (n - 1) * d.P + 2 * margin, width = p.edgeOffset + p.holeD / 2 + margin, fence = 4;
   const Y = y => oy + y;
-  sk.text(0, Y(width) + sk.px(6), vm.word("Drill guide (lay it on the sheet, fence on the edge)", "Drill guide, top view"), { anchor: "start", v: "bottom", cls: "note", px: 13 });
+  // caption on its own row above the guide-hole label
+  sk.text(0, Y(width) + sk.fs * 2.2 + sk.px(6), vm.word("Drill guide: fence on the sheet edge", "Drill guide, top view"), { anchor: "start", v: "bottom", cls: "note", px: 13 });
   sk.rect(0, Y(0), len, Y(width), "d part guide", { "data-key": "guideT guideHoles" });
   sk.rect(0, Y(-fence), len, Y(0), "d part fence", { "data-key": "edgeOffset" });
   for (let k = 0; k < n; k++) sk.circle(margin + k * d.P, Y(p.edgeOffset), p.guideHoleD / 2, "d part hole-o", { "data-key": "guideHoleD guideHoles" });
   sk.linear([0, Y(-fence)], [len, Y(-fence)], [0, -sk.px(12)], { key: "guideHoles", level: "key", label: n + " holes, " + vm.fmt("guideLen", d.guideLen) + " long · " + vm.num("guideT") + " thick", badge: vm.badge("nGuide") });
-  sk.linear([len, Y(0)], [len, Y(p.edgeOffset)], [sk.px(14), 0], { key: "edgeOffset", level: "all", label: vm.word("edge to holes ", "edge offset ") + vm.num("edgeOffset"), badge: vm.badge("edgeOffset"), anchor: "start" });
+  sk.linear([len, Y(0)], [len, Y(p.edgeOffset)], [sk.px(14), 0], { key: "edgeOffset", level: "all", label: vm.word("edge to holes ", "edge offset ") + vm.num("edgeOffset"), badge: vm.badge("edgeOffset"), rot: true });
   sk.leader([margin + d.P + p.guideHoleD / 2 * 0.7, Y(p.edgeOffset + p.guideHoleD / 2 * 0.7)], [margin + d.P * 2.2, Y(width) + sk.fs * 1.4], { key: "guideHoleD", level: "all", label: vm.word("guide hole Ø", "guide hole Ø") + vm.num("guideHoleD"), badge: vm.badge("guideHoleD") });
 }
 

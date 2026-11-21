@@ -109,7 +109,7 @@ function animate(svg, vm, theta, sk) {
 
   const sub = new Sketch({ scale: sk.s, dir, fontPx: sk.fontPx, id: "cu-g" });
   const ln = lanes(sk, v, vm);
-  const label = none ? "holes run together: no plastic between them" : (g.d <= 0 ? vm.word("hits! overlap ", "binding: overlap ") + vm.fmt("tight", -g.d) : vm.word("squeeze room ", "clearance ") + vm.fmt("tight", g.d)) + " mm";
+  const label = none ? "holes overlap: no plastic left" : (g.d <= 0 ? vm.word("hits! overlap ", "binding: overlap ") + vm.fmt("tight", -g.d) : vm.word("squeeze room ", "clearance ") + vm.fmt("tight", g.d)) + " mm";
   // The squeeze-room label stays put in the lane under the frame (it doesn't
   // jump around while the wheel turns); a leader runs to the gap.
   const lw = labelW(sub, label), lx = clampCenter(0, lw, ln.botFree, v.x1);

@@ -470,6 +470,11 @@ svg.panel .endmark { stroke: var(--follow); stroke-width: 1px; stroke-dasharray:
   /* 98.css pins the radio circle to the label's top; center it in the taller label */
   input[type=radio] + label::before { top: calc(50% - 6px); }
   input[type=radio]:checked + label::after { top: calc(50% - 2px); }
+  .menu-btn { min-width: 44px; justify-content: center; }
+  .try-box .try button, .try button { min-height: 44px; }
+  input[type=checkbox] + label, input[type=radio] + label { min-width: 44px; }
+  .settings menu[role=tablist] > li > a { margin: 0; padding: 0 12px; min-height: 44px; display: flex; align-items: center; }
+  .dialog input[type=text] { height: 44px; }
   .playbar input[type=range] { height: 44px; }
   .unit-switch button { min-width: 48px; }
 }

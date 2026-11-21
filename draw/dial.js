@@ -76,9 +76,9 @@ function build(sk, vm) {
   sk.close();
   // the number in the middle
   sk.circle(0, 0, R * 0.42, "dial-hub", { noGrow: true });
-  sk.text(0, R * 0.05, F.trim(theta, 2) + "°", { v: "mid", px: 20, bold: true, cls: "dial-num", a: { "data-key": "rotation" } });
+  sk.text(0, sk.px(6), F.trim(theta, 2) + "°", { v: "mid", px: 20, bold: true, cls: "dial-num", a: { "data-key": "rotation" } });
   const turns = theta / 360;
-  sk.text(0, -R * 0.24, turns > 1.0001 ? F.trim(turns, 2) + " turns" + (more ? "+" : "") : turns > 0.999 ? "1 full turn" : "of a turn", { v: "mid", px: 13, cls: "dial-sub" });
+  sk.text(0, -sk.px(13), turns > 1.0001 ? F.trim(turns, 2) + " turns" + (more ? "+" : "") : turns > 0.999 ? "1 full turn" : "of a turn", { v: "mid", px: 13, cls: "dial-sub" });
   const b = vm.badge("rotation");
   let ly = -outer - sk.px(4);
   if (b) { sk.text(0, ly, "", { v: "top", px: 14, badge: b, anchor: "middle" }); ly -= sk.px(19); }
