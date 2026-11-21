@@ -38,9 +38,9 @@ function renderMeters(box, vm) {
     for (const g of vm.marks || []) {
       const gv = g.m.v[mt.key];
       if (!isFinite(gv)) continue;
-      markers.appendChild(h("span", { class: "mk ghostmk " + g.cls, style: { left: pos(mt, gv) + "%" }, title: g.label + ": " + vm.fmt(mt.key, gv) }, h("span.mk-t", g.short)));
+      markers.appendChild(h("span", { class: "mk ghostmk " + g.cls, style: { left: pos(mt, gv) + "%" }, title: g.label + ": " + vm.fmt(mt.key, gv) }, h("span.mk-t", g.short), h("span.mk-stem")));
     }
-    if (isFinite(v)) markers.appendChild(h("span", { class: "mk nowmk", style: { left: pos(mt, v) + "%" } }, h("span.mk-t", "now")));
+    if (isFinite(v)) markers.appendChild(h("span", { class: "mk nowmk", style: { left: pos(mt, v) + "%" } }, h("span.mk-t", "now"), h("span.mk-stem")));
     const valTxt = (mt.prefix || "") + vm.fmt(mt.key, v) + (mt.unit ? " " + mt.unit : "");
     const ariaMarks = (vm.marks || []).map(g => g.label + " " + vm.fmt(mt.key, g.m.v[mt.key])).join(", ");
     box.appendChild(h("div.meter", { "data-hl": mt.key, role: "group", "aria-label": mt.name },
@@ -54,6 +54,48 @@ function renderMeters(box, vm) {
         h("span", { class: "m-zone z-" + zone }, h("span.m-ic", { html: svgIcon(ICON[zone], 16) }), word)),
       h("div.m-scale", { "aria-hidden": "true" }, h("span", (mt.prefix || "") + vm.fmt(mt.key, mt.min, 1)), h("span", vm.fmt(mt.key, mt.max, 1) + (mt.unit ? " " + mt.unit : "")))));
   }
+  stackAll(box);
+  watch(box);
+}
+
+// Marker labels that would touch move up a row, with a stem down to their
+// arrow. "now" always keeps the bottom row. Needs layout, so it reruns when
+// the meters change width.
+const ROW_PX = 15, BASE_PX = 20;
+function stackMarks(track) {
+  const marks = [...track.querySelectorAll(".mk")];
+  const box = track.querySelector(".m-marks");
+  if (!box || !box.clientWidth) return;
+  const items = marks.map(el => ({ el, c: el.offsetLeft, w: el.querySelector(".mk-t").offsetWidth, now: el.classList.contains("nowmk") }))
+    .sort((a, b) => (b.now - a.now) || a.c - b.c);
+  const rows = [];
+  let top = 0;
+  for (const it of items) {
+    let r = 0;
+    while ((rows[r] || []).some(o => Math.abs(o.c - it.c) < (o.w + it.w) / 2 + 6)) r++;
+    (rows[r] = rows[r] || []).push(it);
+    it.el.querySelector(".mk-stem").style.height = r * ROW_PX + "px";
+    it.el.style.zIndex = String(20 - r); // lower labels cover the stems of higher ones
+    top = Math.max(top, r);
+  }
+  track.style.paddingTop = BASE_PX + top * ROW_PX + "px";
+  box.style.height = BASE_PX + top * ROW_PX + "px";
+}
+function stackAll(box) { for (const t of box.querySelectorAll(".m-track")) stackMarks(t); }
+
+let observer = null, watched = null;
+function watch(box) {
+  if (typeof ResizeObserver === "undefined" || watched === box) return;
+  // only width matters; stacking itself changes the height
+  let lastW = -1;
+  if (!observer) observer = new ResizeObserver(() => {
+    if (!watched || watched.clientWidth === lastW) return;
+    lastW = watched.clientWidth;
+    requestAnimationFrame(() => watched && stackAll(watched));
+  });
+  if (watched) observer.unobserve(watched);
+  watched = box;
+  observer.observe(box);
 }
 
 module.exports = { renderMeters, METERS };

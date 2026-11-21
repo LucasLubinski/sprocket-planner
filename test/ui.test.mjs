@@ -213,6 +213,92 @@ test("planner UI in headless Chrome", { skip: !chrome && "Chrome not found", tim
       assert.equal(await ev(`__t.val("rotation")`), "180", "current design remembered");
     });
 
+    // ---------------- student visuals (phase 4) ----------------
+    await t.test("turn dial: pie, a ring per extra turn, the 300° tick, and a legend for the ghost", async () => {
+      await fresh();
+      const r = await ev(`(async () => {
+        const st = __t.sp().store, q = s => document.querySelectorAll("svg.dial " + s).length;
+        const at360 = { pie: q(".dial-pie"), rings: q(".dial-ring"), servo: q(".servo300"), num: document.querySelector("svg.dial .dial-num").textContent };
+        st.beginEdit("t"); st.setField("rotation", 720); await __t.settle();
+        const at720 = { rings: q(".dial-ring"), sub: document.querySelector("svg.dial .dial-sub").textContent,
+          legend: [...document.querySelectorAll("svg.dial .dial-ghost .glbl")].map(e => e.textContent) };
+        return { at360, at720 };
+      })()`);
+      assert.deepEqual(r.at360, { pie: 1, rings: 0, servo: 1, num: "360°" });
+      assert.equal(r.at720.rings, 1, "one extra ring for the second turn");
+      assert.equal(r.at720.sub, "2 turns");
+      assert.deepEqual(r.at720.legend, ["before 360°"]);
+    });
+
+    await t.test("slide ruler: holes at true spacing, so more pins puts more holes on the bar", async () => {
+      await fresh();
+      const holes = () => ev(`document.querySelectorAll("svg.ruler .rnow-hole").length`);
+      assert.equal(await holes(), 17, "6 in / 9.525 mm = 16 gaps");
+      await typeInto("teeth", "24"); await blur();
+      assert.equal(await holes(), 25, "6 in / 6.35 mm = 24 gaps");
+      const r = await ev(`(() => {
+        const svg = document.querySelector("svg.ruler"), bar = svg.querySelector(".rnow").getBoundingClientRect();
+        const ruler = svg.querySelector(".ruler-body").getBoundingClientRect();
+        const ghost = [...svg.querySelectorAll(".rghost .glbl")].map(e => e.textContent);
+        return { barW: bar.width, rulerW: ruler.width, ghost };
+      })()`);
+      assert.ok(Math.abs(r.barW - r.rulerW) < 2, "the 6 in bar spans the whole 6 in ruler (labels sit above it)");
+      assert.deepEqual(r.ghost, ["before: 6 in · 9.525 mm apart"]);
+    });
+
+    await t.test("fit meters: 24 pins thin plastic is amber; tapered 4.8 pin turns squeeze room red", async () => {
+      await fresh();
+      const zone = k => ev(`(() => { const z = document.querySelector('.meter[data-hl="${k}"] .m-zone'); return z.className.replace("m-zone ", "") + "|" + z.textContent; })()`);
+      assert.equal(await zone("tight"), "z-green|Turns freely");
+      await typeInto("teeth", "24"); await blur();
+      assert.equal(await zone("web"), "z-amber|Thin");
+      await fresh();
+      await typeInto("pinW", "4.8"); await blur();
+      assert.equal(await zone("tight"), "z-red|Pins hit");
+      const warn = await ev(`[...document.querySelectorAll("#chips .chip")].map(c => c.textContent).join("|")`);
+      assert.match(warn, /Pins hit hole edges/);
+    });
+
+    await t.test("fit meters: markers at the same value stack instead of overlapping", async () => {
+      await fresh();
+      await typeInto("rotation", "180"); await blur(); // wiggle room doesn't change: before = now
+      const r = await ev(`(() => {
+        const m = document.querySelector('.meter[data-hl="play"]');
+        const [a, b] = [...m.querySelectorAll(".mk-t")].map(e => e.getBoundingClientRect());
+        const overlap = !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top);
+        return { n: m.querySelectorAll(".mk").length, overlap };
+      })()`);
+      assert.equal(r.n, 2, "now and before");
+      assert.equal(r.overlap, false);
+    });
+
+    await t.test('every "?" button opens a plain-words explainer', async () => {
+      await fresh();
+      await ev(`__t.sp().store.setSettings({ detail: "expert", hub: "custom" }); __t.sp().store.setField("hub", "custom"); 1`); await settle();
+      const bad = await ev(`(async () => {
+        const bad = [];
+        for (const q of document.querySelectorAll("button.qmark[data-explain]")) {
+          if (!q.checkVisibility()) continue;
+          q.click(); await __t.settle();
+          const dlg = document.querySelector(".explainer");
+          const words = dlg ? [...dlg.querySelectorAll(".ex-text p")].map(p => p.textContent).join(" ") : "";
+          if (!dlg || words.length < 20) bad.push(q.getAttribute("data-explain"));
+          const ok = dlg && [...dlg.querySelectorAll("button")].find(b => b.textContent === "OK");
+          if (ok) ok.click(); await __t.settle();
+        }
+        return bad;
+      })()`);
+      assert.deepEqual(bad, [], "buttons with no explainer");
+      assert.equal(await ev(`document.querySelectorAll(".explainer").length`), 0, "OK closes it");
+    });
+
+    await t.test("try-these examples load with badges like any edit", async () => {
+      await fresh();
+      await ev(`[...document.querySelectorAll(".try button")].find(b => /Half turn/.test(b.textContent)).click(); 1`); await settle();
+      assert.equal(await ev(`__t.val("rotation")`), "180");
+      assert.equal(await ev(`__t.badge("drumD")`), "▲ +48.51");
+    });
+
     await t.test("drawing labels never cover a pin or a hole (8 to 40 pins, 1366 and 390 px)", async () => {
       const found = [];
       for (const [w, h] of [[1366, 768], [390, 844]]) {

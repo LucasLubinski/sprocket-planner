@@ -7,7 +7,7 @@ const F = require("../core/format.js");
 const IN = 25.4;
 
 function bar(sk, y, T, P, h, cls, key) {
-  const H = 4.2;
+  const H = 4.2; // keep in step with BAR_H in build()
   sk.rect(0, y - H, T, y, cls + (key ? " d part" : ""), key ? { "data-key": "travel" } : {});
   if (isFinite(P) && P > 0) {
     const n = Math.min(400, Math.floor(T / P + 1e-9));
@@ -22,7 +22,6 @@ function build(sk, vm) {
   const maxT = Math.max(p.travel || 0, ...marks.map(g => g.m.p.travel));
   const inches = Math.max(1, Math.ceil(maxT / IN - 1e-6));
   const L = inches * IN;
-  const labelX = -sk.px(8);
   // ruler body with tick marks every 1/4 inch
   const top = 7;
   sk.rect(0, 0, L, top, "ruler-body");
@@ -32,31 +31,34 @@ function build(sk, vm) {
     if (q % 4 === 0 && (inches <= 24 || (q / 4) % 2 === 0)) sk.text(x + (q === 0 ? sk.px(3) : 0), top - 3.4, String(q / 4), { anchor: q === 0 ? "start" : "middle", v: "top", px: 13, cls: "ruler-n" });
   }
   sk.text(L, top + sk.px(4), "inches", { anchor: "end", v: "bottom", px: 13, cls: "note" });
-  // the slide marker that follows the wheel
+  // Each bar has its name and numbers on a line above it, so the bars can
+  // use the full width of the ruler.
+  const lineH = sk.px(13) * 1.25, gapAbove = sk.px(5), gapBelow = sk.px(3), BAR_H = 4.2;
+  const nowTop = -gapAbove - lineH - gapBelow;
+  // the slide marker that follows the wheel, down through the "now" bar
+  // (labels have a halo, so the line passes behind them)
   sk.open({ id: "ruler-now", class: "ruler-now" });
-  sk.line(0, top + 0.6, 0, -2, "now-l", { noGrow: true });
+  sk.line(0, top + 0.6, 0, nowTop - BAR_H, "now-l", { noGrow: true });
   sk.arrow(0, top - 0.2, -90, "now-a", 9);
   sk.close();
 
-  // now
-  let y = -1.6;
+  const inUnits = T => vm.settings.units === "in" ? F.trim(T / IN, 2) + " in" : F.trim(T, 1) + " mm";
+  let y = -gapAbove;
   const dirWord = vm.dir > 0 ? "slides →" : "← slides";
-  const H = bar(sk, y, p.travel, m.ok ? m.d.P : NaN, p.holeD, "rnow", true);
-  sk.text(labelX, y - H / 2, "now", { anchor: "end", v: "mid", bold: true, px: 13 });
-  const b = vm.badge(vm.settings.units === "in" ? "travelIn" : "travel");
-  const slideTxt = vm.settings.units === "in" ? F.trim(p.travel / IN, 2) + " in" : F.trim(p.travel, 1) + " mm";
-  sk.text(p.travel + sk.px(6), y - H / 2, dirWord + " " + slideTxt + (m.ok ? " · holes " + vm.num("P") + " mm apart" : ""), { anchor: "start", v: "mid", px: 13, badge: b, a: { "data-key": "travel" } });
-  y -= H + 2.2;
+  sk.text(0, y, "now: " + dirWord + " " + inUnits(p.travel) + (m.ok ? " · holes " + vm.num("P") + " mm apart" : ""),
+    { anchor: "start", v: "top", px: 13, badge: vm.badge(vm.settings.units === "in" ? "travelIn" : "travel"), a: { "data-key": "travel" } });
+  const H = bar(sk, nowTop, p.travel, m.ok ? m.d.P : NaN, p.holeD, "rnow", true);
+  y = nowTop - H - sk.px(10);
   for (const g of marks) {
     sk.open({ class: "ghost rghost " + g.cls });
-    const h2 = bar(sk, y, g.m.p.travel, g.m.d.P, g.m.p.holeD, "gbar", false);
-    sk.text(labelX, y - h2 / 2, g.short, { anchor: "end", v: "mid", px: 13, cls: "glbl" });
-    sk.text(g.m.p.travel + sk.px(6), y - h2 / 2, (vm.settings.units === "in" ? F.trim(g.m.p.travel / IN, 2) + " in" : F.trim(g.m.p.travel, 1) + " mm") + " · " + vm.fmt("P", g.m.d.P) + " mm apart", { anchor: "start", v: "mid", px: 13, cls: "glbl" });
+    sk.text(0, y, g.short + ": " + inUnits(g.m.p.travel) + " · " + vm.fmt("P", g.m.d.P) + " mm apart", { anchor: "start", v: "top", px: 13, cls: "glbl" });
+    const gTop = y - lineH - gapBelow;
+    const h2 = bar(sk, gTop, g.m.p.travel, g.m.d.P, g.m.p.holeD, "gbar", false);
     sk.close();
-    y -= h2 + 2.2;
+    y = gTop - h2 - sk.px(10);
   }
   sk.grow(L + sk.px(6), 0);
-  sk.dim({ key: "travel", kind: "length", level: "key", editable: true, value: p.travel, handle: [p.travel, -1.6 - H / 2],
+  sk.dim({ key: "travel", kind: "length", level: "key", editable: true, value: p.travel, handle: [p.travel, nowTop - H / 2],
     drag: { type: "axis", origin: [0, 0], axis: [1, 0], factor: 1 }, step: 1, bigStep: 10 });
 }
 

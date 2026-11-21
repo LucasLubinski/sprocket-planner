@@ -3,7 +3,7 @@
 // 300° for the standard servo's limit, and dashed outlines for the last
 // version and the designs checked for Compare. Not to scale: it shows angle.
 const F = require("../core/format.js");
-const { D2R } = require("./svg.js");
+const { D2R, textWidth } = require("./svg.js");
 
 const R = 10;            // dial radius (drawing units)
 const RING_GAP = 1.25;   // distance between full-turn rings
@@ -53,8 +53,6 @@ function build(sk, vm) {
     sk.open({ class: "ghost dial-ghost " + g.cls });
     sk.push('<path class="gl" d="' + wedge(sk, R, s.rem) + '"/>');
     for (let i = 0; i < s.rings; i++) sk.circle(0, 0, R + 0.5 + RING_GAP * (i + 0.5), "gl", { noGrow: true });
-    const [lx, ly] = pt(R * 0.62, Math.max(12, Math.min(348, s.rem - 14)));
-    sk.text(lx, ly, g.short, { v: "mid", cls: "glbl", px: 13, anchor: "middle" });
     sk.close();
   }
   sk.push('<path class="d part dial-pie" data-key="rotation" d="' + wedge(sk, R, rem) + '"/>');
@@ -82,7 +80,23 @@ function build(sk, vm) {
   const turns = theta / 360;
   sk.text(0, -R * 0.24, turns > 1.0001 ? F.trim(turns, 2) + " turns" + (more ? "+" : "") : turns > 0.999 ? "1 full turn" : "of a turn", { v: "mid", px: 13, cls: "dial-sub" });
   const b = vm.badge("rotation");
-  if (b) sk.text(0, -outer - sk.px(4), "", { v: "top", px: 14, badge: b, anchor: "middle" });
+  let ly = -outer - sk.px(4);
+  if (b) { sk.text(0, ly, "", { v: "top", px: 14, badge: b, anchor: "middle" }); ly -= sk.px(19); }
+  // Legend for the dashed outlines, under the dial (labels inside the dial
+  // would hide under the pie). Two per line, colored like their outline.
+  const items = marks.map(g => ({ g, t: g.short + " " + F.trim(g.m.p.rotation, 1) + "°" }));
+  for (let i = 0; i < items.length; i += 2) {
+    const line = items.slice(i, i + 2), gap = sk.px(14);
+    const ws = line.map(it => textWidth(it.t, 13, true) / sk.s);
+    let x = -(ws.reduce((a, w) => a + w, 0) + gap * (line.length - 1)) / 2;
+    line.forEach((it, k) => {
+      sk.open({ class: "ghost dial-ghost " + it.g.cls });
+      sk.text(x * sk.dir, ly, it.t, { anchor: sk.dir > 0 ? "start" : "end", v: "top", px: 13, cls: "glbl" });
+      sk.close();
+      x += ws[k] + gap;
+    });
+    ly -= sk.px(17);
+  }
   sk.dim({ key: "rotation", kind: "angle", level: "key", editable: true, value: theta, c: [0, 0], r: R,
     handle: pt(R, rem), drag: { type: "turn", center: [0, 0], rings }, step: 1, bigStep: 15 });
 }

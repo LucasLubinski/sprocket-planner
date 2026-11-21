@@ -9,7 +9,7 @@ One self-contained web page (`dist/planner.html`) for designing a 3D-printed pin
 | 1. Core math | Done. Reproduces every reference number. |
 | 2. Window, linked inputs, dimension model, drawings, two-way highlighting, measurements | Done. |
 | 3. Badges, ghosts, saved designs, side-by-side panels, compare table, settings | Done. |
-| 4. Turn dial, slide ruler, fit meters, How it works animation, "?" explainers | Mostly done: dial, ruler, meters, Try-these buttons, How it works loop, "?" explainers with small animations, and the title-bar "What's this?" mode all work. Left: meter labels overlap when two markers sit at the same value; ruler bars are small because their labels sit beside them; no UI tests for these yet. |
+| 4. Turn dial, slide ruler, fit meters, How it works animation, "?" explainers | Done: dial (ghost names in a legend under it), ruler (labels above full-width bars), meters (markers at the same value stack), Try-these buttons, How it works loop, "?" explainers with small animations, and the title-bar "What's this?" mode. UI tests cover each. |
 | 5. Copy OpenSCAD file / settings, sheet SVG and DXF, track box | Not started. `core/sheetfiles.js` already writes the SVG and DXF text; the buttons aren't wired. |
 | 6. Windows 98 polish | Partly done (98.css look, menus, toolbar, status bar). |
 | 7. Drag handles and type-in-place | Not started. The dimension objects already carry drag and value info. |

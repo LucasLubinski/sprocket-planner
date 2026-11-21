@@ -79,6 +79,17 @@ function vendorCSS() {
   return css;
 }
 
+// Windows sometimes holds a just-closed file for a moment (a virus scan, or
+// Chrome from the last test still letting go). Try again briefly.
+function writeRetry(file, text) {
+  for (let i = 0; ; i++) {
+    try { fs.writeFileSync(file, text); return; } catch (e) {
+      if (i >= 20 || !["UNKNOWN", "EBUSY", "EPERM"].includes(e.code)) throw e;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    }
+  }
+}
+
 export function build({ write = true } = {}) {
   const mods = collectModules();
   if (!mods[ENTRY]) throw new Error("missing entry " + ENTRY);
@@ -91,10 +102,10 @@ export function build({ write = true } = {}) {
   html = html.replace("<!-- build:js -->", () => "<script>\n/* Sprocket Planner, built " + stamp + ". Source: core/, state/, draw/, ui/. */\n" + js + "</script>");
   if (write) {
     fs.mkdirSync(path.join(ROOT, "dist"), { recursive: true });
-    fs.writeFileSync(path.join(ROOT, "dist", "planner.html"), html);
+    writeRetry(path.join(ROOT, "dist", "planner.html"), html);
     // Same page for GitHub Pages (Settings > Pages > main, /docs).
     fs.mkdirSync(path.join(ROOT, "docs"), { recursive: true });
-    fs.writeFileSync(path.join(ROOT, "docs", "index.html"), html);
+    writeRetry(path.join(ROOT, "docs", "index.html"), html);
   }
   return { html, bytes: Buffer.byteLength(html), modules: Object.keys(mods).length };
 }

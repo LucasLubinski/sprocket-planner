@@ -372,7 +372,10 @@ svg.how-svg .how-t { fill: var(--ink); }
 .m-marks { position: absolute; left: 3px; right: 3px; top: 0; height: 20px; }
 .mk { position: absolute; bottom: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; pointer-events: auto; }
 .mk::after { content: ""; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid var(--ink); }
-.mk-t { font-size: 13px; line-height: 1; white-space: nowrap; }
+.mk-t { font-size: 13px; line-height: 1; white-space: nowrap; background: var(--face); padding: 0 2px; }
+.mk-stem { width: 2px; height: 0; background: var(--ink); }
+.ghostmk .mk-stem { background: var(--ghost); }
+.ghostmk.g-b .mk-stem { background: #c05000; } .ghostmk.g-c .mk-stem { background: #007a50; } .ghostmk.g-d .mk-stem { background: #a00050; }
 .nowmk { z-index: 2; font-weight: bold; }
 .ghostmk::after { border-top-color: var(--ghost); }
 .ghostmk .mk-t { color: var(--ghost); }
