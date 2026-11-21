@@ -4,7 +4,8 @@
 // A box being typed in is never overwritten.
 const { h, $$ } = require("./dom.js");
 const { GROUPS, FIELDS, FIELD, levelOf, dpFor } = require("../state/fields.js");
-const { isLocked } = require("../state/link.js");
+const { isLocked, LOCKABLE, heldBy, describeRoute, optionLines, whyFor, nameOf } = require("../state/link.js");
+const { svgIcon } = require("./icons.js");
 const F = require("../core/format.js");
 
 const FIXED_DP = new Set(["P", "pitchD", "drumD", "taper", "tipD"]);
@@ -41,6 +42,7 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
 
   function begin(key) {
     store.beginEdit("field:" + key);
+    for (const r of rows.values()) if (r.route && r.routeKey !== key) { r.route.hidden = true; r.route.innerHTML = ""; r.routeSig = ""; }
     activeKey = key;
     highlighter.setFocus(key);
   }
@@ -56,6 +58,7 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
   function nudge(key, dir, big) {
     const f = FIELD[key];
     if (isLocked(store.design, key)) { onStatus("Set Hub to Custom to change the hub settings."); return; }
+    if (lockState(key)) { onStatus(lockMessage(key)); return; }
     const row = rows.get(key);
     const cur = F.parse(row.input.value);
     const step = stepFor(key, big);
@@ -100,24 +103,36 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
         else store.setField(f.key, F.parse(input.value) || getVM().model.v[f.key]);
       });
     }
+    let lockBtn = null, heldMark = null;
+    if (LOCKABLE.includes(f.key)) {
+      lockBtn = h("button.lockbtn", { type: "button", "aria-pressed": "false", "aria-label": "Lock " + f.name, title: "Lock " + f.name, "data-lock": f.key });
+      lockBtn.addEventListener("click", () => {
+        const on = store.toggleLock(f.key);
+        onStatus(on ? f.name + " is locked. Other numbers will move instead." : f.name + " is unlocked.");
+      });
+      heldMark = h("span.heldmark", { hidden: true, role: "img" }, h("span.hm-ic", { html: svgIcon("held", 16) }), "held");
+      extra.push(lockBtn, heldMark);
+    }
     const box = h("span.numbox", input, h("span.spin", up, dn));
-    const row = h("div.field", { "data-field": f.key, "data-hl": f.key },
+    const row = h("div.field", { "data-field": f.key, "data-hl": f.hl || f.key },
       h("div.f-top",
         h("label", { for: id }, h("span.f-name", f.name), " ", h("span.f-term", "(" + f.term + ")")),
         h("button.qmark", { type: "button", "aria-label": "What is " + f.name + "?", title: "What is this?", "data-explain": f.key, text: "?" })),
       h("div.f-row", box, unit, ...extra, slot),
       h("div.f-hint", { id: "h-" + f.key }, f.hint),
-      h("div.f-lock", { hidden: true }, "Locked to the goBILDA hub. Pick Custom hub to change it."));
+      h("div.f-lock", { hidden: true }, "Locked to the goBILDA hub. Pick Custom hub to change it."),
+      h("div.f-route", { hidden: true, "aria-live": "polite" }));
     if (levelOf(f.key) === "expert") row.classList.add("lvl-expert");
 
-    input.addEventListener("focus", () => { begin(f.key); typing = null; });
+    input.addEventListener("focus", () => { begin(f.key); if (f.hl) highlighter.setFocus(f.hl); typing = null; });
     input.addEventListener("blur", () => {
       typing = null; activeKey = null;
-      highlighter.clearFocus(f.key);
+      highlighter.clearFocus(f.hl || f.key);
       paintOne(f.key, getVM());
     });
     input.addEventListener("input", () => {
       if (input.readOnly) return;
+      if (lockState(f.key)) return;
       typing = f.key;
       if (auto && auto.checked) auto.checked = false;
       const ok = commit(f.key, input.value);
@@ -138,7 +153,7 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
     };
     up.addEventListener("pointerdown", press(1));
     dn.addEventListener("pointerdown", press(-1));
-    rows.set(f.key, { f, row, input, slot, auto, unitBtns, unit, lock: row.querySelector(".f-lock") });
+    rows.set(f.key, { f, row, input, slot, auto, unitBtns, unit, lock: row.querySelector(".f-lock"), lockBtn, heldMark, route: row.querySelector(".f-route"), routeKey: f.key, routeSig: "" });
     return row;
   }
 
@@ -154,8 +169,10 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
     for (const b of [tapered, straight]) {
       b.addEventListener("click", () => {
         store.beginEdit("shape");
-        store.setField("shape", b.getAttribute("data-shape"));
-        onStatus(b.getAttribute("data-shape") === "straight" ? "Straight part set to gap + sheet thickness." : "Straight part set to 0.");
+        const ok = store.setField("shape", b.getAttribute("data-shape"));
+        const r = store.route, desc = r && describeRoute(r, r.before, fmtVal, store.locks);
+        if (desc) onStatus(desc.first);
+        else if (ok) onStatus(b.getAttribute("data-shape") === "straight" ? "Straight part set to gap + sheet thickness" + (store.design.straightPast ? " + " + F.trim(store.design.straightPast, 2) + " mm" : "") + "." : "Straight part set to 0.");
       });
       b.addEventListener("focus", () => highlighter.setFocus("pinStraight"));
       b.addEventListener("blur", () => highlighter.clearFocus("pinStraight"));
@@ -194,6 +211,105 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
     return row;
   }
 
+  // ---- locks ----
+  // "locked", "held" (fixed by other locks) or null
+  function lockState(key) {
+    if (store.locks.includes(key)) return "locked";
+    if (heldBy(store.locks)[key]) return "held";
+    return null;
+  }
+  function listNames(keys) {
+    const n = keys.map(nameOf);
+    return n.length <= 1 ? n.join("") : n.slice(0, -1).join(", ") + " and " + n[n.length - 1];
+  }
+  function lockMessage(key) {
+    const lk = lockState(key), name = FIELD[key] ? FIELD[key].name : nameOf(key);
+    if (lk === "locked") return name + " is locked. Unlock it to change it.";
+    return name + " is held by the locks on " + listNames(heldBy(store.locks)[key]) + ". Unlock one to change it.";
+  }
+  // A value with its unit, the way the boxes show it: "6 in", "280.3°", "46.21 mm".
+  function fmtVal(k, v) {
+    if (!isFinite(v)) return "—";
+    if (k === "travel") return unitsIn() ? F.trim(v / 25.4, 2) + " in" : F.trim(v, 1) + " mm";
+    if (k === "rotation" || k === "taper") return F.trim(v, 1) + "°";
+    if (k === "teeth") return String(Math.round(v)) + " pins";
+    return F.trim(v, k === "P" ? 3 : 2) + " mm";
+  }
+
+  // The note or chooser under the edited box. Rebuilt only when it changes,
+  // so keyboard focus on a chooser option survives redraws.
+  let lastStatus = "";
+  function paintRoute(key, row) {
+    if (!row.route) return;
+    const r = store.route;
+    const show = r && r.key === key && (r.refused || r.editId === store.session.editId);
+    if (!show) { if (row.routeSig) { row.route.hidden = true; row.route.innerHTML = ""; row.routeSig = ""; } return; }
+    const desc = describeRoute(r, r.before, fmtVal, store.locks);
+    const choose = store.settings.moveChoice === "choose" && !r.refused && r.options.length > 0 && !!r.options[0].mover;
+    const lines = choose ? optionLines(r, r.before, fmtVal) : [];
+    const sig = JSON.stringify([r.refused, desc && desc.text, lines.map(l => l.text), r.mover, choose]);
+    if (desc && desc.first !== lastStatus) { lastStatus = desc.first; onStatus(desc.first); }
+    if (sig === row.routeSig) return;
+    const hadFocus = row.route.contains(document.activeElement) ? document.activeElement.getAttribute("data-mover") : null;
+    row.routeSig = sig;
+    row.route.innerHTML = "";
+    if (r.refused) {
+      row.route.className = "f-route refused";
+      row.route.append(h("span.rt-ic", { html: svgIcon("stopSign", 16) }), h("span", desc.text));
+    } else if (choose && lines.length > 1) {
+      row.route.className = "f-route chooser";
+      const group = h("div.rt-opts", { role: "radiogroup", "aria-label": "What moves to make room" });
+      const btns = lines.map(l => {
+        const on = l.mover === r.mover;
+        const b = h("button.rt-opt", { type: "button", role: "radio", "aria-checked": String(on), tabindex: on ? "0" : "-1", "data-mover": l.mover }, h("span.rt-dot", { "aria-hidden": "true" }), l.text);
+        b.addEventListener("click", () => pick(l.mover));
+        return b;
+      });
+      group.addEventListener("keydown", e => {
+        const i = btns.indexOf(document.activeElement);
+        if (i < 0) return;
+        let j = -1;
+        if (e.key === "ArrowDown" || e.key === "ArrowRight") j = (i + 1) % btns.length;
+        else if (e.key === "ArrowUp" || e.key === "ArrowLeft") j = (i - 1 + btns.length) % btns.length;
+        if (j < 0) return;
+        e.preventDefault();
+        pick(lines[j].mover, true);
+      });
+      group.append(...btns);
+      row.route.append(h("div.rt-head", "What moves to make room?"), group);
+      if (desc) row.route.append(h("p.rt-note", desc.text));
+    } else if (desc || (choose && lines.length === 1)) {
+      row.route.className = "f-route note";
+      const text = desc ? desc.text : "Only " + lines[0].name + " can move. " + whyFor(r.key, lines[0].mover) + " " + lines[0].text + ".";
+      row.route.append(h("span.rt-ic", { html: svgIcon("info", 16) }), h("span", text));
+    } else {
+      row.route.hidden = true; row.routeSig = ""; return;
+    }
+    row.route.hidden = false;
+    if (hadFocus) { const b = row.route.querySelector('[data-mover="' + hadFocus + '"]'); if (b) b.focus({ preventScroll: true }); }
+    function pick(mover, keyboard) {
+      if (store.chooseMover(mover)) onStatus(nameOf(mover) + " moves to make room.");
+      if (keyboard) setTimeout(() => { const b = row.route.querySelector('[data-mover="' + mover + '"]'); if (b) b.focus({ preventScroll: true }); }, 0);
+    }
+  }
+
+  // "Keep the tip round": a check box that sets the Tip size lock.
+  function lockCheckField(f) {
+    const cb = h("input", { type: "checkbox", id: "f-" + f.key });
+    const row = h("div.field.check", { "data-field": f.key, "data-hl": f.hl || f.lockKey },
+      h("div.f-row", cb, h("label", { for: "f-" + f.key }, h("span.f-name", f.name), " ", h("span.f-term", "(" + f.term + ")")),
+        h("button.qmark", { type: "button", "aria-label": "What is " + f.name + "?", "data-explain": f.key, text: "?" })),
+      h("div.f-hint", f.hint));
+    cb.addEventListener("focus", () => highlighter.setFocus(f.hl || f.lockKey));
+    cb.addEventListener("blur", () => highlighter.clearFocus(f.hl || f.lockKey));
+    cb.addEventListener("change", () => {
+      store.toggleLock(f.lockKey, cb.checked);
+      onStatus(cb.checked ? "The tip keeps its size. The side slant changes instead." : "The side slant stays. The tip size changes instead.");
+    });
+    rows.set(f.key, { f, row, lockcheck: cb });
+    return row;
+  }
+
   // ---- build ----
   pane.innerHTML = "";
   if (examples && examples.length) {
@@ -214,7 +330,7 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
     groupBoxes[g.id] = fs;
   }
   for (const f of FIELDS) {
-    const el = f.type === "shape" ? shapeField(f) : f.type === "hub" ? hubField(f) : f.type === "check" ? checkField(f) : numField(f);
+    const el = f.type === "shape" ? shapeField(f) : f.type === "hub" ? hubField(f) : f.type === "check" ? checkField(f) : f.type === "lockcheck" ? lockCheckField(f) : numField(f);
     groupBoxes[f.group].appendChild(el);
   }
   const studentNote = h("p.student-note", "More settings (gap, tip, hub, drill guide, CNC sheet) are in Expert detail. Pick View ▸ Expert detail.");
@@ -229,11 +345,30 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
   function paintOne(key, vm) {
     const r = rows.get(key); if (!r) return;
     const d = store.design;
+    if (r.f.showIf) r.row.hidden = !r.f.showIf(d);
     if (r.input) {
       const locked = isLocked(d, key);
-      r.input.readOnly = locked;
+      const lk = lockState(key);
+      r.input.readOnly = locked || !!lk;
       r.row.classList.toggle("locked", locked);
+      r.row.classList.toggle("is-locked", lk === "locked");
+      r.row.classList.toggle("is-held", lk === "held");
       if (r.lock) r.lock.hidden = !locked;
+      if (r.lockBtn) {
+        const on = lk === "locked";
+        r.lockBtn.setAttribute("aria-pressed", String(on));
+        const label = (on ? "Unlock " : "Lock ") + r.f.name;
+        r.lockBtn.setAttribute("aria-label", label); r.lockBtn.title = label;
+        const icon = on ? "lock" : "unlock";
+        if (r.lockBtn.dataset.icon !== icon) { r.lockBtn.innerHTML = svgIcon(icon, 16); r.lockBtn.dataset.icon = icon; }
+      }
+      if (r.heldMark) {
+        r.heldMark.hidden = lk !== "held";
+        const by = held[key];
+        const t = by ? "Held: the locks on " + listNames(by) + " fix this number." : "";
+        r.heldMark.title = t; r.heldMark.setAttribute("aria-label", t || "held");
+      }
+      paintRoute(key, r);
       if (typing !== key) { r.input.value = displayValue(key, vm); r.input.classList.remove("partial"); }
       if (key === "travel") {
         r.unit.textContent = "";
@@ -242,7 +377,7 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
       if (r.auto) r.auto.checked = d[key] == null;
       const edited = vm.edited(key) || (key === "travel" && vm.edited("travel"));
       r.row.classList.toggle("changed", edited);
-      r.input.title = edited ? "You changed this" : "";
+      r.input.title = lk === "held" ? r.heldMark.title : lk === "locked" ? r.f.name + " is locked." : edited ? "You changed this" : "";
       const b = edited ? null : vm.badge(badgeKey(key));
       r.slot.textContent = b ? b.text : "";
       r.slot.className = "bdg-slot" + (b ? " bdg " + b.cls : "");
@@ -256,13 +391,19 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
       r.note.textContent = d.shape === "custom" ? "Custom shape" : "";
     } else if (r.sel) {
       r.sel.value = d.hub;
+    } else if (r.lockcheck) {
+      r.lockcheck.checked = store.locks.includes(r.f.lockKey);
     } else if (r.cb) {
       r.cb.checked = !!d[key];
       r.row.classList.toggle("locked", isLocked(d, key));
     }
   }
 
-  function paint(vm) { for (const key of rows.keys()) paintOne(key, vm); }
+  let held = {};
+  function paint(vm) {
+    held = heldBy(store.locks);
+    for (const key of rows.keys()) paintOne(key, vm);
+  }
 
   return {
     paint,

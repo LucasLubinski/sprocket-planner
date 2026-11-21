@@ -17,13 +17,12 @@ One self-contained web page (`dist/planner.html`) for designing a 3D-printed pin
 
 Test results right now: 69 of 69 pass (`node --test`).
 
-### Added to the plan (not built yet)
+### Locks and pin options (added after Phase 4)
 
-These were added after Phase 4. The full instructions are in `CLAUDE.md`.
-
-- **Locking inputs** (section "Locking inputs"): padlocks on the main boxes. When a change would move a locked number, the planner moves another one and explains why; it refuses only when nothing can move.
-- **Choosing what moves** (same section): students pick which number balances a change, or turn on "Pick for me" in Settings.
-- **Pin shape options** (same section): "Keep the tip round" so tall pins don't come to a point, and "Straight past the sheet" for how far the straight part runs in Straight mode.
+- **Locking inputs:** padlocks on the main boxes. When a change would move a locked number, the planner moves another one and says why beside the box (and in the status bar). It refuses only when nothing can move. Boxes that the locks fix together show "held".
+- **Choosing what moves:** with "Let me choose" (Settings, or View menu), a chooser under the edited box lists every free number that could balance the change, with a preview. "Pick for me" skips it.
+- **Pin shape options:** "Keep the tip round" (sets the Tip size lock) and "Straight past the sheet" (Straight mode only).
+- The routing table and its words live in `state/link.js`; the lock state in `state/store.js`.
 
 ## Commands
 

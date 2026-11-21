@@ -2,7 +2,7 @@
 // Design state, edit sessions, undo, saved designs and settings, in one place.
 // No DOM here: the UI subscribes and redraws.
 const { createSession, beginEdit, noteChange, resetBaseline, clone } = require("./session.js");
-const { applyField } = require("./link.js");
+const { route, LOCKABLE } = require("./link.js");
 const { defaultDesign, normalizeDesign } = require("../core/params.js");
 const { normalizeSettings } = require("./settings.js");
 
@@ -32,6 +32,12 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
   let settings = normalizeSettings(loaded && loaded.settings);
   let saved = (loaded && Array.isArray(loaded.saved) ? loaded.saved : []).map(normalizeSaved).filter(Boolean);
   let nextLetter = loaded && Number.isInteger(loaded.nextLetter) ? loaded.nextLetter : saved.length;
+  // Locks hold a box, not a value. They stay through examples, loads and
+  // resets, are remembered with the current design, and are not part of
+  // saved designs or the OpenSCAD file.
+  let locks = (loaded && Array.isArray(loaded.locks) ? loaded.locks : []).filter(k => LOCKABLE.includes(k));
+  // The routing of the current edit: what moved, the options, the student's pick.
+  let lastRoute = null, choice = null;
   let seq = 0;
   const session = createSession(design);
   const undoStack = [], redoStack = [];
@@ -39,7 +45,7 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
   if (settings.badgeBase !== "last" && !saved.some(s => s.id === settings.badgeBase)) settings = { ...settings, badgeBase: "last" };
 
   const emit = kind => { for (const fn of listeners) fn(kind); };
-  const persist = () => { if (storage) storage.save({ design, settings, saved, nextLetter }); };
+  const persist = () => { if (storage) storage.save({ design, settings, saved, nextLetter, locks }); };
 
   function change(nd, key, opts = {}) {
     const started = noteChange(session, key);
@@ -63,16 +69,52 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
     get storageOk() { return storage ? storage.ok : false; },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
 
-    // An edit may be starting (focus, drag start, button click).
-    beginEdit(source) { beginEdit(session, design, source); },
+    get locks() { return locks; },
+    get route() { return lastRoute; },
+    // An edit may be starting (focus, drag start, button click). The chooser
+    // starts again from the usual choice, and the last note goes away.
+    beginEdit(source) { beginEdit(session, design, source); choice = null; lastRoute = null; },
 
-    // One field edited, following the linked rules.
+    // One field edited, following the linked rules and the locks.
+    // Returns true when the design changed.
     setField(key, value) {
-      const nd = applyField(design, key, value);
-      if (JSON.stringify(nd) === JSON.stringify(design)) return false;
-      change(nd, key);
+      // Every keystroke of one edit routes from the design as the edit began
+      // (typing 6 then 60 is one change to 60, not 6 then 60). That design also
+      // gives the old values for notes and chooser previews.
+      const sameEdit = !session.pending && lastRoute && lastRoute.key === key && lastRoute.editId === session.editId;
+      const before = sameEdit ? lastRoute.before : design;
+      const pick = settings.moveChoice === "choose" && choice && choice.key === key ? choice.mover : null;
+      const r = route(before, key, value, { locks, mover: pick });
+      lastRoute = { ...r, before, editId: -1 };
+      if (r.refused || JSON.stringify(r.design) === JSON.stringify(design)) { emit("route"); return false; }
+      change(r.design, key);
+      lastRoute.editId = session.editId;
       return true;
     },
+    // The student picked which number moves (chooser). Redo this edit from
+    // where it began, with that pick; it stays for the rest of the edit.
+    chooseMover(mover) {
+      const lr = lastRoute;
+      if (!lr || lr.refused || lr.editId !== session.editId) return false;
+      choice = { key: lr.key, mover };
+      const r = route(lr.before, lr.key, lr.value, { locks, mover });
+      if (r.refused) return false;
+      lastRoute = { ...r, before: lr.before, editId: session.editId };
+      design = r.design;
+      persist();
+      emit("design");
+      return true;
+    },
+    get choice() { return choice; },
+    toggleLock(key, on) {
+      if (!LOCKABLE.includes(key)) return false;
+      const want = on === undefined ? !locks.includes(key) : !!on;
+      locks = want ? [...new Set([...locks, key])] : locks.filter(k => k !== key);
+      persist();
+      emit("locks");
+      return want;
+    },
+    clearRoute() { lastRoute = null; emit("route"); },
 
     // A whole new design (example, saved design, opened file, reset).
     setDesign(nd, source) {

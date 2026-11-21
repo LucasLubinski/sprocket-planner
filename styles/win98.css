@@ -515,3 +515,24 @@ svg.panel .endmark { stroke: var(--follow); stroke-width: 1px; stroke-dasharray:
 @media (max-width: 420px) { .trackbox .tb-row { grid-template-columns: 1fr; } }
 .help ol { padding-left: 22px; margin: 6px 0; }
 .help li { margin: 4px 0; }
+
+/* ---- locks, held boxes, what moved and why ---- */
+.lockbtn { min-width: 32px; width: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.lockbtn[aria-pressed=true] { box-shadow: inset -1px -1px var(--hilight), inset 1px 1px var(--dkshadow), inset -2px -2px var(--light), inset 2px 2px var(--shadow); background: #fff4a0; }
+.heldmark { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; color: var(--text-dim); font-style: italic; }
+.field.is-locked .numbox input, .field.is-held .numbox input { background: var(--face); color: var(--text); }
+.field.is-locked .spin button, .field.is-held .spin button { color: var(--shadow); }
+.f-route { margin-top: 6px; padding: 4px 6px; font-size: 13px; border: 1px solid var(--shadow); background: var(--window); display: flex; gap: 6px; align-items: flex-start; flex-wrap: wrap; }
+.f-route.refused { background: var(--stop-bg); }
+.f-route.note { background: var(--tip-bg); }
+.f-route.chooser { flex-direction: column; background: var(--tip-bg); }
+.rt-ic { display: inline-flex; flex: none; padding-top: 1px; }
+.rt-head { font-weight: bold; }
+.rt-opts { display: flex; flex-direction: column; gap: 4px; align-self: stretch; }
+.rt-opt { justify-content: flex-start; text-align: left; display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 2px 8px; }
+.rt-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; background: var(--window); box-shadow: inset 1px 1px var(--shadow), inset -1px -1px var(--hilight); }
+.rt-opt[aria-checked=true] { font-weight: bold; }
+.rt-opt[aria-checked=true] .rt-dot { background: radial-gradient(circle, var(--text) 0 3px, var(--window) 3.5px); }
+.rt-note { margin: 2px 0 0; }
+@media (any-pointer: coarse) { .lockbtn { width: 44px; min-width: 44px; height: 44px; } .rt-opt { min-height: 44px; } }
+.heldmark[hidden], .f-route[hidden] { display: none; }

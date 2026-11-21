@@ -103,13 +103,13 @@ test("planner UI in headless Chrome", { skip: !chrome && "Chrome not found", tim
     });
 
     await t.test("every input lights up at least one part of a drawing (expert detail)", async () => {
-      await ev(`__t.sp().store.setSettings({ detail: "expert", hub: "custom" }); __t.sp().store.setField("hub", "custom"); 1`); await settle();
+      await ev(`__t.sp().store.setSettings({ detail: "expert", hub: "custom" }); __t.sp().store.setField("hub", "custom"); __t.sp().store.setField("shape", "straight"); 1`); await settle();
       const missing = await ev(`(async () => {
         const miss = [];
         for (const f of document.querySelectorAll(".field[data-field]")) {
           const key = f.getAttribute("data-field");
           const el = f.querySelector("input[type=text], select, input[type=checkbox], button.shape-btn");
-          if (!el) continue;
+          if (!el || f.closest("[hidden]")) continue;
           el.focus();
           await __t.settle();
           const n = [...document.querySelectorAll("svg.drw .hl")].length;
@@ -376,6 +376,139 @@ test("planner UI in headless Chrome", { skip: !chrome && "Chrome not found", tim
       await ev(`[...document.querySelectorAll(".try button")].find(b => /Half turn/.test(b.textContent)).click(); 1`); await settle();
       assert.equal(await ev(`__t.val("rotation")`), "180");
       assert.equal(await ev(`__t.badge("drumD")`), "▲ +48.51");
+    });
+
+    // ---------------- locks, choosing what moves, pin options (phase 7) ----------------
+    const lockBtn = k => `document.querySelector('.lockbtn[data-lock="${k}"]').click()`;
+    const routeText = k => ev(`(document.querySelector('.field[data-field="${k}"] .f-route:not([hidden])') || {}).textContent || ""`);
+    const near = (a, e, tol, what) => assert.ok(Math.abs(parseFloat(a) - e) <= tol, what + ": got " + a + ", expected " + e);
+
+    await t.test("lock Sheet slides, Wheel size 60: slide stays 6 in, the wheel turns 280.3°, with a note saying why", async () => {
+      await fresh();
+      await ev(lockBtn("travel") + "; 1"); await settle();
+      assert.equal(await ev(`document.querySelector('.lockbtn[data-lock="travel"]').getAttribute("aria-pressed")`), "true");
+      assert.equal(await ev(`__t.f("travel").readOnly`), true, "a locked box can't be typed in");
+      await typeInto("drumD", "60");
+      assert.equal(await ev(`__t.val("travel")`), "6");
+      near(await ev(`__t.val("rotation")`), 280.3, 0.05, "Wheel turns");
+      const note = await routeText("drumD");
+      assert.match(note, /Sheet slides is locked at 6 in\./);
+      assert.match(note, /So Wheel turns is now 280\.3° instead of 360°\./);
+      assert.equal(await ev(`document.querySelector(".st-msg").textContent`), "Sheet slides is locked at 6 in.", "status repeats the first sentence");
+      await blur();
+    });
+
+    await t.test("lock Hole spacing, Pins 16 → 24: spacing stays 9.525 and the wheel turns 240°", async () => {
+      await fresh();
+      await ev(lockBtn("P") + "; 1"); await settle();
+      await typeInto("teeth", "24"); await blur();
+      assert.equal(await ev(`__t.val("P")`), "9.525");
+      near(await ev(`__t.val("rotation")`), 240, 0.01, "Wheel turns");
+    });
+
+    await t.test("lock Wheel turns and Sheet slides: Wheel size is refused, Push circle and Wheel size are held", async () => {
+      await fresh();
+      await ev(lockBtn("rotation") + "; " + lockBtn("travel") + "; 1"); await settle();
+      const held = await ev(`["pitchD", "drumD", "P"].map(k => document.querySelector('.field[data-field="' + k + '"]').classList.contains("is-held") + ":" + __t.f(k).readOnly)`);
+      assert.deepEqual(held, ["true:true", "true:true", "false:false"]);
+      // a held box can't be typed in, so try the edit through the store, as a drag would
+      const r = await ev(`(async () => { const st = __t.sp().store; st.beginEdit("t"); const ok = st.setField("drumD", 60); await __t.settle(); return { ok, drum: __t.val("drumD"), msg: (document.querySelector('.field[data-field="drumD"] .f-route') || {}).textContent }; })()`);
+      assert.equal(r.ok, false);
+      assert.equal(r.drum, "46.21");
+      assert.equal(r.msg, "Can't change Wheel size. Sheet slides and Wheel turns are both locked. Together they fix the wheel size. Unlock one.");
+      await ev(lockBtn("teeth") + "; 1"); await settle();
+      assert.ok(await ev(`document.querySelector('.field[data-field="P"]').classList.contains("is-held")`), "adding a lock on Pins also holds Hole spacing");
+    });
+
+    await t.test("lock Tip size, Pin width 4.0 → 4.4: tip stays 2.00, slant becomes 32.4°", async () => {
+      await fresh();
+      await ev(`__t.sp().store.setSettings({ detail: "expert" }); 1`); await settle();
+      await ev(lockBtn("tipD") + "; 1"); await settle();
+      await typeInto("pinW", "4.4"); await blur();
+      assert.equal(await ev(`__t.val("tipD")`), "2.00");
+      assert.equal(await ev(`__t.val("taper")`), "32.4");
+      assert.equal(await ev(`document.getElementById("f-keepTip").checked`), true, "Keep the tip round shows the same lock");
+    });
+
+    await t.test("a locked or held box has no drag handle", async () => {
+      await fresh();
+      await ev(lockBtn("rotation") + "; " + lockBtn("travel") + "; 1"); await settle();
+      const r = await ev(`[...document.querySelectorAll(".dhandle")].map(e => e.getAttribute("data-key"))`);
+      for (const k of ["rotation", "travel", "drumD", "pitchD"]) assert.ok(!r.includes(k), k + " has no handle");
+    });
+
+    await t.test("choosing what moves: Wheel size 60 offers Sheet slides (picked) or Wheel turns; the pick sticks", async () => {
+      await fresh();
+      await ev(`(__t.f("drumD").focus(), __t.f("drumD").select(), 1)`);
+      await page.type("60"); await settle();
+      const opts = await ev(`[...document.querySelectorAll('.field[data-field="drumD"] .rt-opt')].map(b => b.getAttribute("aria-checked") + "|" + b.textContent)`);
+      assert.deepEqual(opts, ["true|Sheet slides: 6 in → 7.71 in", "false|Wheel turns: 360° → 280.3°"]);
+      await ev(`document.querySelector('.field[data-field="drumD"] .rt-opt[data-mover="rotation"]').click(); 1`); await settle();
+      assert.equal(await ev(`__t.val("travel")`), "6");
+      near(await ev(`__t.val("rotation")`), 280.3, 0.05, "picked Wheel turns");
+      // keep typing in the same edit: the pick stays
+      await ev(`(__t.f("drumD").focus(), __t.f("drumD").setSelectionRange(2, 2), 1)`);
+      await page.type("0"); await settle();
+      assert.equal(await ev(`__t.sp().store.route.mover`), "rotation");
+      assert.equal(await ev(`__t.val("travel")`), "6");
+      await blur();
+      // a locked number never appears as an option
+      await ev(lockBtn("travel") + "; 1"); await settle();
+      await typeInto("rotation", "180");
+      const opts2 = await ev(`[...document.querySelectorAll('.field[data-field="rotation"] .rt-opt')].map(b => b.textContent)`);
+      assert.ok(!opts2.some(t => /Sheet slides/.test(t)), "no Sheet slides option: " + opts2.join(" / "));
+      await blur();
+    });
+
+    await t.test("Pick for me: no chooser, and the result matches the usual rule", async () => {
+      await fresh();
+      await ev(`__t.sp().run("moveChoice", "auto"); 1`); await settle();
+      await typeInto("drumD", "60");
+      assert.equal(await ev(`document.querySelectorAll('.rt-opt').length`), 0);
+      assert.equal(await ev(`__t.val("rotation")`), "360");
+      assert.equal(await ev(`__t.val("travel")`), "7.7056"); // push circle 60 + 2 × 0.4 + 1.5 = 62.3 mm
+      await blur();
+    });
+
+    await t.test("Keep the tip round: height 2.6 → 4.0 keeps the 2.00 tip, slant 17.6° (unchecked, the pin comes to a point)", async () => {
+      await fresh();
+      await typeInto("pinH", "4"); await blur();
+      const chips = await ev(`[...document.querySelectorAll("#warnings li, #chips li")].map(c => c.textContent).join("|")`);
+      assert.match(chips, /comes to a point/i);
+      await fresh();
+      await ev(`document.getElementById("f-keepTip").click(); 1`); await settle();
+      await typeInto("pinH", "4"); await blur();
+      assert.equal(await ev(`__t.val("taper")`), "17.6");
+      assert.equal(await ev(`__t.sp().store.design.tipD.toFixed(2)`), "2.00");
+    });
+
+    await t.test("Straight through the sheet + Straight past the sheet 0.5: straight part 2.4, follows the thickness", async () => {
+      await fresh();
+      assert.equal(await ev(`!!document.querySelector('.field[data-field="straightPast"]').closest("[hidden]") || document.querySelector('.field[data-field="straightPast"]').hidden`), true, "hidden for tapered pins");
+      await ev(`document.querySelector('.shape-btn[data-shape="straight"]').click(); 1`); await settle();
+      await typeInto("straightPast", "0.5"); await blur();
+      assert.equal(await ev(`__t.sp().store.design.pinStraight.toFixed(2)`), "2.40");
+      await typeInto("sheetT", "2"); await blur();
+      assert.equal(await ev(`__t.sp().store.design.pinStraight.toFixed(2)`), "2.90");
+    });
+
+    await t.test("Straight with Keep the tip round: the 2 mm tip stays and the slant becomes 68.9°", async () => {
+      await fresh();
+      await ev(`document.getElementById("f-keepTip").click(); 1`); await settle();
+      await ev(`document.querySelector('.shape-btn[data-shape="straight"]').click(); 1`); await settle();
+      assert.equal(await ev(`__t.val("taper")`), "68.9");
+      assert.equal(await ev(`__t.sp().store.design.tipD.toFixed(2)`), "2.00");
+    });
+
+    await t.test("locks stay through examples and reloads, but aren't part of saved designs", async () => {
+      await fresh();
+      await ev(lockBtn("travel") + "; 1"); await settle();
+      await ev(`[...document.querySelectorAll(".try button")].find(b => /Half turn/.test(b.textContent)).click(); 1`); await settle();
+      assert.equal(await ev(`document.querySelector('.lockbtn[data-lock="travel"]').getAttribute("aria-pressed")`), "true");
+      await ev(`__t.sp().store.saveDesign("A"); 1`);
+      await page.goto(URL); await ev(HELPERS); await settle();
+      assert.equal(await ev(`document.querySelector('.lockbtn[data-lock="travel"]').getAttribute("aria-pressed")`), "true", "remembered");
+      assert.equal(await ev(`"locks" in __t.sp().store.saved[0] || "locks" in __t.sp().store.saved[0].design`), false);
     });
 
     // ---------------- Windows 98 look, readable sizes (phase 6) ----------------

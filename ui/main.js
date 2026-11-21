@@ -363,6 +363,8 @@ function start() {
     lineUp(v) { store.setSettings({ lineUp: v }); },
     animateBy(v) { store.setSettings({ animateBy: v }); },
     part(v) { store.setSettings({ part: v }); },
+    moveChoice(v) { store.setSettings({ moveChoice: v }); setStatus(v === "choose" ? "You'll choose what moves when a change needs room." : "The planner picks what moves."); },
+    unlockAll() { for (const k of [...store.locks]) store.toggleLock(k, false); setStatus("All boxes unlocked."); },
     example(id) {
       const ex = EXAMPLES.find(e => e.id === id);
       if (!ex) return;
@@ -438,6 +440,7 @@ function start() {
       { label: "&Redo", cmd: "redo", accel: "Ctrl+Y", enabled: () => store.canRedo },
       "-",
       { label: "&Clear change badges", cmd: "clearBadges" },
+      { label: "Unlock &all boxes", cmd: "unlockAll", enabled: () => store.locks.length > 0 },
       { label: "Reset &design", cmd: "resetDesign" }
     ] },
     { id: "view", label: "&View", items: [
@@ -450,6 +453,9 @@ function start() {
       { label: "&All dimension labels", cmd: "labels", arg: "all", radio: true, checked: () => S().dimLabels === "all" },
       { label: "&Key labels only", cmd: "labels", arg: "key", radio: true, checked: () => S().dimLabels === "key" },
       { label: "&No labels", cmd: "labels", arg: "none", radio: true, checked: () => S().dimLabels === "none" },
+      "-",
+      { label: "When a change moves numbers: &let me choose", cmd: "moveChoice", arg: "choose", radio: true, checked: () => S().moveChoice === "choose" },
+      { label: "When a change moves numbers: &pick for me", cmd: "moveChoice", arg: "auto", radio: true, checked: () => S().moveChoice === "auto" },
       "-",
       { label: "Se&ttings…", cmd: "settings" }
     ] },

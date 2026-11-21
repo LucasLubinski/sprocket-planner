@@ -21,7 +21,8 @@ const CHOICES = {
   hover: [true, false],
   direction: ["cw", "ccw"],
   scheme: ["standard", "contrast"],
-  part: ["sprocket", "drill_guide"]
+  part: ["sprocket", "drill_guide"],
+  moveChoice: ["choose", "auto"]                // When a change moves other numbers: let me choose, or pick for me
 };
 
 const DEFAULT_SETTINGS = Object.freeze(Object.fromEntries(

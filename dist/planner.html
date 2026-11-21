@@ -528,6 +528,27 @@ svg.panel .endmark { stroke: var(--follow); stroke-width: 1px; stroke-dasharray:
 .help ol { padding-left: 22px; margin: 6px 0; }
 .help li { margin: 4px 0; }
 
+/* ---- locks, held boxes, what moved and why ---- */
+.lockbtn { min-width: 32px; width: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.lockbtn[aria-pressed=true] { box-shadow: inset -1px -1px var(--hilight), inset 1px 1px var(--dkshadow), inset -2px -2px var(--light), inset 2px 2px var(--shadow); background: #fff4a0; }
+.heldmark { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; color: var(--text-dim); font-style: italic; }
+.field.is-locked .numbox input, .field.is-held .numbox input { background: var(--face); color: var(--text); }
+.field.is-locked .spin button, .field.is-held .spin button { color: var(--shadow); }
+.f-route { margin-top: 6px; padding: 4px 6px; font-size: 13px; border: 1px solid var(--shadow); background: var(--window); display: flex; gap: 6px; align-items: flex-start; flex-wrap: wrap; }
+.f-route.refused { background: var(--stop-bg); }
+.f-route.note { background: var(--tip-bg); }
+.f-route.chooser { flex-direction: column; background: var(--tip-bg); }
+.rt-ic { display: inline-flex; flex: none; padding-top: 1px; }
+.rt-head { font-weight: bold; }
+.rt-opts { display: flex; flex-direction: column; gap: 4px; align-self: stretch; }
+.rt-opt { justify-content: flex-start; text-align: left; display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 2px 8px; }
+.rt-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; background: var(--window); box-shadow: inset 1px 1px var(--shadow), inset -1px -1px var(--hilight); }
+.rt-opt[aria-checked=true] { font-weight: bold; }
+.rt-opt[aria-checked=true] .rt-dot { background: radial-gradient(circle, var(--text) 0 3px, var(--window) 3.5px); }
+.rt-note { margin: 2px 0 0; }
+@media (any-pointer: coarse) { .lockbtn { width: 44px; min-width: 44px; height: 44px; } .rt-opt { min-height: 44px; } }
+.heldmark[hidden], .f-route[hidden] { display: none; }
+
 </style>
 </head>
 <body class="detail-student">
@@ -1045,6 +1066,7 @@ const BASE = {
   holeD: 4.5, sheetT: 1.5, gap: 0.4,
   // pins
   pinW: 4.0, pinStraight: 0, pinH: 2.6, tipD: 2.0, pinFlat: 0.7, shape: "tapered",
+  straightPast: 0,             // Straight shape: the straight part runs this far past the sheet top
   // body and hub
   drumW: 5, hub: "gobilda", ...GOBILDA_HUB,
   // drill guide
@@ -1487,6 +1509,15 @@ const FIELDS = [
     hint: "The pin stays full width this far up, then slants.",
     callout: "Straight section: the part of the pin that stays full width.",
     explain: { anim: "pinshape", text: ["Straight pins stay full width through the sheet.", "Then the sheet height doesn't matter much."] } },
+  { key: "keepTip", group: "pins", type: "lockcheck", lockKey: "tipD", hl: "tipD", name: "Keep the tip round", term: "hold tip size",
+    hint: "Keeps the tip's size. Then the side slant changes instead.",
+    callout: "Keep the tip round: the tip stays the same size when you change the pin.",
+    explain: { anim: "pinshape", text: ["A taller pin with the same slant gets a smaller tip.", "Too tall and the tip shrinks to a point.", "Check this to keep the tip round. The slant changes instead."] } },
+  { key: "straightPast", group: "pins", name: "Straight past the sheet", term: "extra straight", unit: "mm", step: 0.1, big: 0.5, maxDp: 3, hl: "pinStraight",
+    showIf: d => d.shape === "straight",
+    hint: "How far the full-width part goes above the sheet before the slant starts.",
+    callout: "Straight past the sheet: how far the pin stays full width above the sheet.",
+    explain: { anim: "pinshape", text: ["Straight pins stay full width through the sheet.", "This adds a little more straight part above it.", "Use a minus number to end it inside the sheet."] } },
   { key: "pinFlat", group: "pins", level: "expert", name: "Pin flattening", term: "pin_flat", unit: "× width", step: 0.05, big: 0.1, maxDp: 3,
     hint: "Pins are trimmed flat so they print without supports.",
     callout: "Pin flattening: pins are trimmed flat to print without supports.",
@@ -1606,6 +1637,7 @@ const METRICS = {
   taper: { name: "Side slant", term: "taper angle", unit: "°", dp: 1 },
   tipD: { name: "Tip size", term: "tip diameter", unit: "mm", dp: 2 },
   pinStraight: { name: "Straight part", term: "straight section", unit: "mm", dp: 2 },
+  straightPast: { name: "Straight past the sheet", term: "extra straight", unit: "mm", dp: 2 },
   pinFlat: { name: "Pin flattening", term: "pin_flat", unit: "× width", dp: 2 },
   drumW: { name: "Sprocket thickness", term: "drum_w", unit: "mm", dp: 2 },
   boltSquare: { name: "Bolt pattern", term: "bolt square", unit: "mm", dp: 2 },
@@ -1690,81 +1722,311 @@ function dpFor(key, decimals = 2) {
 module.exports = { GROUPS, FIELDS, FIELD, METRICS, MEASURE_ROWS, COMPARE_ROWS, toGreen, levelOf, dpFor };
 
 } };
-defs["state/link.js"] = { map: {"../core/taper.js":"core/taper.js","../core/params.js":"core/params.js"}, fn: function (module, exports, require) {
+defs["state/link.js"] = { map: {"../core/taper.js":"core/taper.js","../core/params.js":"core/params.js","./fields.js":"state/fields.js"}, fn: function (module, exports, require) {
 "use strict";
 // Linked inputs: when one field is edited, which others stay fixed and which
-// follow. This is the "Field edited / Stays fixed / Changes" table in CLAUDE.md.
-// Typing, drag handles, type-in-place and buttons all come through here.
+// follow (the "Field edited / Stays fixed / Changes" table in CLAUDE.md), and
+// what moves instead when a lock is in the way (the "Which number moves
+// instead" table). Typing, spinner arrows, drag handles, type-in-place and
+// buttons all come through route().
 const T = require("../core/taper.js");
 const { GOBILDA_HUB, HUB_KEYS } = require("../core/params.js");
+const { METRICS } = require("./fields.js");
 
-// Pin width, straight part or height changed: hold the taper angle, move the tip.
-// If there is no usable angle (tip was too big), keep the tip and re-measure the angle.
-function holdTaper(d) {
-  if (isFinite(d.taper)) {
-    const r = T.tipFromTaper(d.pinW, d.pinStraight, d.pinH, d.taper);
-    if (isFinite(r.tipD)) { d.tipD = r.tipD; return; }
-  }
-  d.taper = T.taperFromTip(d.pinW, d.pinStraight, d.pinH, d.tipD).deg;
+// Boxes that can be locked (hub, drill guide and sheet-file boxes don't
+// interact with anything, so they have no lock).
+const LOCKABLE = ["rotation", "travel", "teeth", "P", "pitchD", "drumD", "holeD", "sheetT", "gap",
+  "pinW", "pinH", "taper", "tipD", "pinStraight"];
+const MOTION = ["rotation", "travel", "teeth", "P", "pitchD", "drumD", "sheetT", "gap"];
+const PIN = ["pinW", "pinH", "pinStraight", "taper", "tipD"];
+
+// For each edited field: the number that normally moves, then what moves
+// instead, left to right. Pins on the wheel is never picked (it must stay whole).
+const MOVERS = {
+  rotation: ["drumD", "travel"],
+  travel: ["drumD", "rotation"],
+  teeth: ["P", "rotation", "travel"],
+  P: ["travel", "rotation"],
+  pitchD: ["travel", "rotation"],
+  drumD: ["travel", "rotation"],
+  sheetT: ["drumD", "travel", "rotation"],
+  gap: ["drumD", "travel", "rotation"],
+  pinW: ["tipD", "taper"],
+  pinH: ["tipD", "taper"],
+  pinStraight: ["tipD", "taper"],
+  straightPast: ["tipD", "taper"],
+  shape: ["tipD", "taper"],
+  taper: ["tipD", "pinH"],
+  tipD: ["taper", "pinH"]
+};
+
+// The one-line "why" for each relation a lock reason uses.
+const WHY = {
+  motion: "Slide = push circle × π × turn ÷ 360.",
+  spacing: "Hole spacing = slide per full turn ÷ pins.",
+  sheet: "Push circle = wheel size + 2 × gap + sheet thickness.",
+  pin: "Tip size and slant are tied by the pin's width and height."
+};
+function whyFor(key, mover) {
+  if (PIN.includes(key) || key === "shape" || key === "straightPast") return WHY.pin;
+  if (key === "teeth" || key === "P" || mover === "P") return WHY.spacing;
+  if (key === "sheetT" || key === "gap") return WHY.sheet;
+  return WHY.motion;
 }
 
-// "Straight through the sheet" keeps the straight part equal to gap + thickness.
-function followStraight(d) {
-  if (d.shape === "straight") {
-    d.pinStraight = d.gap + d.sheetT;
-    holdTaper(d);
-  }
-}
+const nameOf = k => (METRICS[k] && METRICS[k].name) || k;
 
-// Returns a new design with `key` set to `value` and the linked fields updated.
-// Lengths are in mm; travel in mm (the UI converts inches before calling).
-function applyField(design, key, value) {
-  const d = { ...design };
+// ---------- values, including the derived ones ----------
+const trevOf = d => d.travel * 360 / d.rotation;
+function valueOf(d, key) {
   switch (key) {
-    case "rotation": d.rotation = value; break;              // travel and pins fixed: wheel size and spacing follow
-    case "travel": d.travel = value; break;                  // turn and pins fixed
-    case "teeth": d.teeth = value; break;                    // turn, travel and wheel size fixed: spacing follows
-    case "P": d.travel = value * d.teeth * d.rotation / 360; break;           // T_rev = N x P
-    case "pitchD": d.travel = Math.PI * value * d.rotation / 360; break;      // T_rev = pi x D
-    case "drumD": {                                                          // R_p = D/2 + g + t/2
-      const Rp = value / 2 + d.gap + d.sheetT / 2;
-      d.travel = 2 * Math.PI * Rp * d.rotation / 360;
-      break;
+    case "P": return trevOf(d) / d.teeth;
+    case "pitchD": return trevOf(d) / Math.PI;
+    case "drumD": return trevOf(d) / Math.PI - 2 * d.gap - d.sheetT;
+    default: return d[key];
+  }
+}
+function same(a, b) {
+  if (typeof a !== "number" || typeof b !== "number") return a === b;
+  if (Number.isNaN(a) && Number.isNaN(b)) return true;
+  return Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
+}
+
+// ---------- the pin: tip size <-> side slant, holding width, straight part, height ----------
+// Move `mover` so the pin stays consistent after its width, height or straight part changed.
+function settlePin(d, mover) {
+  if (mover === "tipD") {
+    if (isFinite(d.taper)) {
+      const r = T.tipFromTaper(d.pinW, d.pinStraight, d.pinH, d.taper);
+      if (isFinite(r.tipD)) { d.tipD = r.tipD; return d; }
     }
-    case "sheetT": d.sheetT = value; followStraight(d); break; // turn and travel fixed: drum and play follow
-    case "gap": d.gap = value; followStraight(d); break;
-    case "pinW": d.pinW = value; holdTaper(d); break;
-    case "pinH": d.pinH = value; holdTaper(d); break;
-    case "pinStraight": d.pinStraight = value; d.shape = "custom"; holdTaper(d); break;
-    case "taper": {
-      d.taper = value;
-      const r = T.tipFromTaper(d.pinW, d.pinStraight, d.pinH, value);
-      if (isFinite(r.tipD)) d.tipD = r.tipD;
-      break;
-    }
-    case "tipD": d.tipD = value; d.taper = T.taperFromTip(d.pinW, d.pinStraight, d.pinH, value).deg; break;
-    case "shape":
-      d.shape = value;
-      d.pinStraight = value === "straight" ? d.gap + d.sheetT : 0;
-      holdTaper(d);
-      break;
-    case "hub":
-      d.hub = value;
-      if (value === "gobilda") Object.assign(d, GOBILDA_HUB);
-      break;
-    case "pilot": d.pilot = !!value; break;
-    case "sheetLen": case "rowOffset": d[key] = value === null ? null : value; break;
-    default: d[key] = value;
+    // no usable angle (the tip was too big): keep the tip and re-measure the angle
+    d.taper = T.taperFromTip(d.pinW, d.pinStraight, d.pinH, d.tipD).deg;
+    return d;
+  }
+  if (mover === "taper") {
+    const r = T.taperFromTip(d.pinW, d.pinStraight, d.pinH, d.tipD);
+    if (!r.ok) return null; // this tip can't fit on this pin: let the next option try
+    d.taper = r.deg;
+    return d;
   }
   return d;
 }
+// Pin height that gives tip d at slant alpha (width and straight part held).
+function heightFor(w, s, deg, tipD) {
+  const al = deg * Math.PI / 180, sn = Math.sin(al);
+  if (!(sn > 1e-6)) return NaN;
+  const H = s + (w / 2 * Math.cos(al) - tipD / 2 * (1 - sn)) / sn;
+  return H > s ? H : NaN;
+}
+
+function straightFor(d) { return Math.max(0, d.gap + d.sheetT + (d.straightPast || 0)); }
+
+// "Straight through the sheet" keeps the straight part = gap + thickness (+ extra).
+function followStraight(d, locks = []) {
+  if (d.shape !== "straight" || locks.includes("pinStraight")) return d;
+  const s = straightFor(d);
+  if (same(s, d.pinStraight)) return d;
+  for (const m of ["tipD", "taper"]) {
+    if (locks.includes(m)) continue;
+    const nd = settlePin({ ...d, pinStraight: s }, m);
+    if (nd && !violated(d, nd, locks).length) return nd;
+  }
+  return d; // nothing can follow without breaking a lock: leave the pin as it is
+}
+
+// ---------- one edit with one chosen mover (no lock checks here) ----------
+function solve(design, key, value, mover, locks = []) {
+  let d = { ...design };
+  const trev0 = trevOf(design);
+  const fromTrev = trev => {
+    if (!(trev > 0) || !isFinite(trev)) return null;
+    if (mover === "travel") d.travel = trev * d.rotation / 360;
+    else if (mover === "rotation") d.rotation = d.travel * 360 / trev;
+    else return null;
+    return d;
+  };
+  switch (key) {
+    case "rotation":
+      d.rotation = value;
+      if (mover === "travel") d.travel = trev0 * value / 360;
+      return d;
+    case "travel":
+      d.travel = value;
+      if (mover === "rotation") { if (!(value > 0)) return null; d.rotation = value * 360 / trev0; }
+      return d;
+    case "teeth":
+      d.teeth = value;
+      if (mover === "P") return d;
+      return fromTrev(value * valueOf(design, "P"));
+    case "P": return fromTrev(value * d.teeth);
+    case "pitchD": return fromTrev(Math.PI * value);
+    case "drumD": return fromTrev(Math.PI * (value + 2 * d.gap + d.sheetT));
+    case "sheetT": case "gap": {
+      d[key] = value;
+      if (mover !== "drumD") {
+        const drum0 = valueOf(design, "drumD");
+        if (!fromTrev(Math.PI * (drum0 + 2 * d.gap + d.sheetT))) return null;
+      }
+      return followStraight(d, locks);
+    }
+    case "pinW": case "pinH": d[key] = value; return settlePin(d, mover);
+    case "pinStraight": d.pinStraight = value; d.shape = "custom"; return settlePin(d, mover);
+    case "straightPast":
+      d.straightPast = value;
+      if (d.shape !== "straight") return d;
+      d.pinStraight = straightFor(d);
+      return settlePin(d, mover);
+    case "shape":
+      d.shape = value;
+      d.pinStraight = value === "straight" ? straightFor(d) : 0;
+      return settlePin(d, mover);
+    case "taper": {
+      d.taper = value;
+      if (mover === "pinH") {
+        const H = heightFor(d.pinW, d.pinStraight, value, d.tipD);
+        if (!isFinite(H)) return null;
+        d.pinH = H;
+        return d;
+      }
+      const r = T.tipFromTaper(d.pinW, d.pinStraight, d.pinH, value);
+      if (isFinite(r.tipD)) d.tipD = r.tipD;
+      return d;
+    }
+    case "tipD": {
+      d.tipD = value;
+      if (mover === "pinH") {
+        const H = heightFor(d.pinW, d.pinStraight, d.taper, value);
+        if (!isFinite(H)) return null;
+        d.pinH = H;
+        return d;
+      }
+      d.taper = T.taperFromTip(d.pinW, d.pinStraight, d.pinH, value).deg;
+      return d;
+    }
+    case "hub":
+      d.hub = value;
+      if (value === "gobilda") Object.assign(d, GOBILDA_HUB);
+      return d;
+    case "pilot": d.pilot = !!value; return d;
+    case "sheetLen": case "rowOffset": d[key] = value === null ? null : value; return d;
+    default: d[key] = value; return d;
+  }
+}
+
+// Locked numbers that an edit would change.
+function violated(before, after, locks) {
+  return locks.filter(k => !same(valueOf(before, k), valueOf(after, k)));
+}
+
+// ---------- held boxes: numbers the locks fix together ----------
+// Returns { key: [lock keys] } for boxes that aren't locked themselves but
+// can't change while these locks are on.
+function heldBy(locks) {
+  const L = new Set(locks), K = new Set(locks);
+  let trev = false, grew = true;
+  while (grew) {
+    grew = false;
+    const add = k => { if (!K.has(k)) { K.add(k); grew = true; } };
+    if (!trev && ((K.has("rotation") && K.has("travel")) || K.has("pitchD") || (K.has("teeth") && K.has("P")) ||
+      (K.has("drumD") && K.has("gap") && K.has("sheetT")))) { trev = true; grew = true; }
+    if (trev) {
+      add("pitchD"); add("drumD");
+      if (K.has("rotation")) add("travel");
+      if (K.has("travel")) add("rotation");
+      if (K.has("teeth")) add("P");
+    }
+    const pinKnown = PIN.filter(k => K.has(k));
+    if (pinKnown.length === 4) for (const k of PIN) add(k);
+  }
+  const out = {};
+  for (const k of K) {
+    if (L.has(k)) continue;
+    const group = PIN.includes(k) ? PIN : MOTION;
+    out[k] = locks.filter(x => group.includes(x));
+  }
+  return out;
+}
+
+// ---------- routing ----------
+// route(design, key, value, { locks, mover }) ->
+//   { design, mover, normal, options: [{ mover, design }], blocked: { mover: [lock keys] }, refused, by }
+// `mover` is the student's pick from the chooser; it falls back to the first
+// free option. When nothing can move, refused is true and design is unchanged.
+function route(design, key, value, { locks = [], mover = null } = {}) {
+  const movers = MOVERS[key] || [null];
+  const options = [], blocked = {};
+  for (const m of movers) {
+    if (m && locks.includes(m)) { blocked[m] = [m]; continue; }
+    const nd = solve(design, key, value, m, locks);
+    if (!nd) { blocked[m] = []; continue; }
+    const v = violated(design, nd, locks);
+    if (v.length) { blocked[m] = v; continue; }
+    options.push({ mover: m, design: nd });
+  }
+  if (!options.length) {
+    const by = [...new Set(Object.values(blocked).flat())];
+    return { design, mover: null, normal: movers[0], options, blocked, refused: true, by, key, value };
+  }
+  const pick = options.find(o => o.mover === mover) || options[0];
+  return { design: pick.design, mover: pick.mover, normal: movers[0], options, blocked, refused: false, by: [], key, value };
+}
+
+// Returns a new design with `key` set to `value` and the linked fields updated
+// (no locks). Lengths are in mm; travel in mm (the UI converts inches first).
+function applyField(design, key, value) { return route(design, key, value).design; }
+
+// Pin width, straight part or height changed: hold the taper angle, move the tip.
+function holdTaper(d) { return settlePin(d, "tipD"); }
 
 // Hub mount settings are locked to the goBILDA preset unless the hub is Custom.
 function isLocked(design, key) {
   return design.hub === "gobilda" && HUB_KEYS.includes(key);
 }
 
-module.exports = { applyField, holdTaper, followStraight, isLocked };
+// ---------- words ----------
+function listNames(keys) {
+  const n = keys.map(nameOf);
+  return n.length <= 1 ? n.join("") : n.slice(0, -1).join(", ") + " and " + n[n.length - 1];
+}
+
+// The note beside the edited box when a lock sent the change somewhere else,
+// or the message when nothing could move. fmt(key, value) -> "6 in".
+// Returns null when the usual number moved.
+function describeRoute(r, before, fmt, locks = []) {
+  if (!r) return null;
+  if (r.refused) {
+    const by = r.by.length ? r.by : locks.filter(k => (MOTION.includes(r.key) ? MOTION : PIN).includes(k));
+    const held = heldBy(locks)[r.key];
+    const verb = by.length === 1 ? "is locked." : by.length === 2 ? "are both locked." : "are locked.";
+    const why = held ? "Together they fix the " + nameOf(r.key).toLowerCase() + "." :
+      r.key === "teeth" || MOTION.includes(r.key) ? "Pins must stay whole, so nothing else can move." : "No other number can move to make room.";
+    const sentences = ["Can't change " + nameOf(r.key) + ".", by.length ? listNames(by) + " " + verb : "", by.length === 1 && !held ? whyFor(r.key) : why,
+      by.length === 1 ? "Unlock it." : "Unlock one."].filter(Boolean);
+    return { kind: "refused", text: sentences.join(" "), first: sentences.slice(0, 2).join(" ") };
+  }
+  if (!r.normal || r.mover === r.normal || !r.blocked[r.normal]) return null;
+  const by = r.blocked[r.normal];
+  let first;
+  if (by.length === 1 && by[0] === r.normal) first = nameOf(r.normal) + " is locked at " + fmt(r.normal, valueOf(before, r.normal)) + ".";
+  else if (by.length) first = nameOf(r.normal) + " is held by the " + (by.length === 1 ? "lock on " : "locks on ") + listNames(by) + ".";
+  else first = nameOf(r.normal) + " can't move that far.";
+  const so = "So " + nameOf(r.mover) + " is now " + fmt(r.mover, valueOf(r.design, r.mover)) + " instead of " + fmt(r.mover, valueOf(before, r.mover)) + ".";
+  return { kind: "moved", text: [first, whyFor(r.key, r.mover), so].join(" "), first };
+}
+
+// One line per option for the chooser: "Sheet slides: 6 in → 7.71 in".
+function optionLines(r, before, fmt) {
+  return r.options.map(o => ({
+    mover: o.mover, name: nameOf(o.mover),
+    text: nameOf(o.mover) + ": " + fmt(o.mover, valueOf(before, o.mover)) + " → " + fmt(o.mover, valueOf(o.design, o.mover))
+  }));
+}
+
+module.exports = {
+  LOCKABLE, MOVERS, WHY, whyFor, applyField, route, solve, heldBy, valueOf, violated, describeRoute, optionLines,
+  holdTaper, followStraight, isLocked, nameOf
+};
 
 } };
 defs["state/session.js"] = { map: {}, fn: function (module, exports, require) {
@@ -1839,7 +2101,8 @@ const CHOICES = {
   hover: [true, false],
   direction: ["cw", "ccw"],
   scheme: ["standard", "contrast"],
-  part: ["sprocket", "drill_guide"]
+  part: ["sprocket", "drill_guide"],
+  moveChoice: ["choose", "auto"]                // When a change moves other numbers: let me choose, or pick for me
 };
 
 const DEFAULT_SETTINGS = Object.freeze(Object.fromEntries(
@@ -1943,7 +2206,7 @@ defs["state/store.js"] = { map: {"./session.js":"state/session.js","./link.js":"
 // Design state, edit sessions, undo, saved designs and settings, in one place.
 // No DOM here: the UI subscribes and redraws.
 const { createSession, beginEdit, noteChange, resetBaseline, clone } = require("./session.js");
-const { applyField } = require("./link.js");
+const { route, LOCKABLE } = require("./link.js");
 const { defaultDesign, normalizeDesign } = require("../core/params.js");
 const { normalizeSettings } = require("./settings.js");
 
@@ -1973,6 +2236,12 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
   let settings = normalizeSettings(loaded && loaded.settings);
   let saved = (loaded && Array.isArray(loaded.saved) ? loaded.saved : []).map(normalizeSaved).filter(Boolean);
   let nextLetter = loaded && Number.isInteger(loaded.nextLetter) ? loaded.nextLetter : saved.length;
+  // Locks hold a box, not a value. They stay through examples, loads and
+  // resets, are remembered with the current design, and are not part of
+  // saved designs or the OpenSCAD file.
+  let locks = (loaded && Array.isArray(loaded.locks) ? loaded.locks : []).filter(k => LOCKABLE.includes(k));
+  // The routing of the current edit: what moved, the options, the student's pick.
+  let lastRoute = null, choice = null;
   let seq = 0;
   const session = createSession(design);
   const undoStack = [], redoStack = [];
@@ -1980,7 +2249,7 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
   if (settings.badgeBase !== "last" && !saved.some(s => s.id === settings.badgeBase)) settings = { ...settings, badgeBase: "last" };
 
   const emit = kind => { for (const fn of listeners) fn(kind); };
-  const persist = () => { if (storage) storage.save({ design, settings, saved, nextLetter }); };
+  const persist = () => { if (storage) storage.save({ design, settings, saved, nextLetter, locks }); };
 
   function change(nd, key, opts = {}) {
     const started = noteChange(session, key);
@@ -2004,16 +2273,52 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
     get storageOk() { return storage ? storage.ok : false; },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
 
-    // An edit may be starting (focus, drag start, button click).
-    beginEdit(source) { beginEdit(session, design, source); },
+    get locks() { return locks; },
+    get route() { return lastRoute; },
+    // An edit may be starting (focus, drag start, button click). The chooser
+    // starts again from the usual choice, and the last note goes away.
+    beginEdit(source) { beginEdit(session, design, source); choice = null; lastRoute = null; },
 
-    // One field edited, following the linked rules.
+    // One field edited, following the linked rules and the locks.
+    // Returns true when the design changed.
     setField(key, value) {
-      const nd = applyField(design, key, value);
-      if (JSON.stringify(nd) === JSON.stringify(design)) return false;
-      change(nd, key);
+      // Every keystroke of one edit routes from the design as the edit began
+      // (typing 6 then 60 is one change to 60, not 6 then 60). That design also
+      // gives the old values for notes and chooser previews.
+      const sameEdit = !session.pending && lastRoute && lastRoute.key === key && lastRoute.editId === session.editId;
+      const before = sameEdit ? lastRoute.before : design;
+      const pick = settings.moveChoice === "choose" && choice && choice.key === key ? choice.mover : null;
+      const r = route(before, key, value, { locks, mover: pick });
+      lastRoute = { ...r, before, editId: -1 };
+      if (r.refused || JSON.stringify(r.design) === JSON.stringify(design)) { emit("route"); return false; }
+      change(r.design, key);
+      lastRoute.editId = session.editId;
       return true;
     },
+    // The student picked which number moves (chooser). Redo this edit from
+    // where it began, with that pick; it stays for the rest of the edit.
+    chooseMover(mover) {
+      const lr = lastRoute;
+      if (!lr || lr.refused || lr.editId !== session.editId) return false;
+      choice = { key: lr.key, mover };
+      const r = route(lr.before, lr.key, lr.value, { locks, mover });
+      if (r.refused) return false;
+      lastRoute = { ...r, before: lr.before, editId: session.editId };
+      design = r.design;
+      persist();
+      emit("design");
+      return true;
+    },
+    get choice() { return choice; },
+    toggleLock(key, on) {
+      if (!LOCKABLE.includes(key)) return false;
+      const want = on === undefined ? !locks.includes(key) : !!on;
+      locks = want ? [...new Set([...locks, key])] : locks.filter(k => k !== key);
+      persist();
+      emit("locks");
+      return want;
+    },
+    clearRoute() { lastRoute = null; emit("route"); },
 
     // A whole new design (example, saved design, opened file, reset).
     setDesign(nd, source) {
@@ -4583,6 +4888,60 @@ const ICONS = {
     "...kkBBBBBBkk...",
     ".....kkkkkk.....",
     "................"
+  ],
+  lock: [
+    "................",
+    ".....kkkkkk.....",
+    "....kggggggk....",
+    "...kgk....kgk...",
+    "...kgk....kgk...",
+    "...kgk....kgk...",
+    "..kkkkkkkkkkkk..",
+    "..kyyyyyyyyyyk..",
+    "..kyYYYYYYYYyk..",
+    "..kyyyykkyyyyk..",
+    "..kyyyykkyyyyk..",
+    "..kyyyyykyyyyk..",
+    "..kyyyyykyyyyk..",
+    "..kyyyyyyyyyyk..",
+    "..kkkkkkkkkkkk..",
+    "................"
+  ],
+  unlock: [
+    "........kkkkkk..",
+    ".......kggggggk.",
+    "......kgk....kgk",
+    "......kgk....kgk",
+    "......kgk.......",
+    "......kgk.......",
+    "..kkkkkkkkkkkk..",
+    "..kllllllllllk..",
+    "..klwwwwwwwwlk..",
+    "..kllllkkllllk..",
+    "..kllllkkllllk..",
+    "..klllllkllllk..",
+    "..klllllkllllk..",
+    "..kllllllllllk..",
+    "..kkkkkkkkkkkk..",
+    "................"
+  ],
+  held: [
+    "................",
+    "................",
+    "....kkkkkkkk....",
+    "...kggggggggk...",
+    "...kgk....kgk...",
+    "...kgk....kgk...",
+    "..kkkkkkkkkkkk..",
+    "..kllllllllllk..",
+    "..klgglgglgglk..",
+    "..kllllllllllk..",
+    "..klgglgglgglk..",
+    "..kllllllllllk..",
+    "..kkkkkkkkkkkk..",
+    "................",
+    "................",
+    "................"
   ]
 };
 
@@ -4613,14 +4972,15 @@ function dataUri(name) {
 module.exports = { ICONS, svgIcon, dataUri };
 
 } };
-defs["ui/inputs.js"] = { map: {"./dom.js":"ui/dom.js","../state/fields.js":"state/fields.js","../state/link.js":"state/link.js","../core/format.js":"core/format.js"}, fn: function (module, exports, require) {
+defs["ui/inputs.js"] = { map: {"./dom.js":"ui/dom.js","../state/fields.js":"state/fields.js","../state/link.js":"state/link.js","./icons.js":"ui/icons.js","../core/format.js":"core/format.js"}, fn: function (module, exports, require) {
 "use strict";
 // The input boxes: linked fields with spinner arrows, units, hints, "?"
 // explainers, change badges and the "you changed this" outline.
 // A box being typed in is never overwritten.
 const { h, $$ } = require("./dom.js");
 const { GROUPS, FIELDS, FIELD, levelOf, dpFor } = require("../state/fields.js");
-const { isLocked } = require("../state/link.js");
+const { isLocked, LOCKABLE, heldBy, describeRoute, optionLines, whyFor, nameOf } = require("../state/link.js");
+const { svgIcon } = require("./icons.js");
 const F = require("../core/format.js");
 
 const FIXED_DP = new Set(["P", "pitchD", "drumD", "taper", "tipD"]);
@@ -4657,6 +5017,7 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
 
   function begin(key) {
     store.beginEdit("field:" + key);
+    for (const r of rows.values()) if (r.route && r.routeKey !== key) { r.route.hidden = true; r.route.innerHTML = ""; r.routeSig = ""; }
     activeKey = key;
     highlighter.setFocus(key);
   }
@@ -4672,6 +5033,7 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
   function nudge(key, dir, big) {
     const f = FIELD[key];
     if (isLocked(store.design, key)) { onStatus("Set Hub to Custom to change the hub settings."); return; }
+    if (lockState(key)) { onStatus(lockMessage(key)); return; }
     const row = rows.get(key);
     const cur = F.parse(row.input.value);
     const step = stepFor(key, big);
@@ -4716,24 +5078,36 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
         else store.setField(f.key, F.parse(input.value) || getVM().model.v[f.key]);
       });
     }
+    let lockBtn = null, heldMark = null;
+    if (LOCKABLE.includes(f.key)) {
+      lockBtn = h("button.lockbtn", { type: "button", "aria-pressed": "false", "aria-label": "Lock " + f.name, title: "Lock " + f.name, "data-lock": f.key });
+      lockBtn.addEventListener("click", () => {
+        const on = store.toggleLock(f.key);
+        onStatus(on ? f.name + " is locked. Other numbers will move instead." : f.name + " is unlocked.");
+      });
+      heldMark = h("span.heldmark", { hidden: true, role: "img" }, h("span.hm-ic", { html: svgIcon("held", 16) }), "held");
+      extra.push(lockBtn, heldMark);
+    }
     const box = h("span.numbox", input, h("span.spin", up, dn));
-    const row = h("div.field", { "data-field": f.key, "data-hl": f.key },
+    const row = h("div.field", { "data-field": f.key, "data-hl": f.hl || f.key },
       h("div.f-top",
         h("label", { for: id }, h("span.f-name", f.name), " ", h("span.f-term", "(" + f.term + ")")),
         h("button.qmark", { type: "button", "aria-label": "What is " + f.name + "?", title: "What is this?", "data-explain": f.key, text: "?" })),
       h("div.f-row", box, unit, ...extra, slot),
       h("div.f-hint", { id: "h-" + f.key }, f.hint),
-      h("div.f-lock", { hidden: true }, "Locked to the goBILDA hub. Pick Custom hub to change it."));
+      h("div.f-lock", { hidden: true }, "Locked to the goBILDA hub. Pick Custom hub to change it."),
+      h("div.f-route", { hidden: true, "aria-live": "polite" }));
     if (levelOf(f.key) === "expert") row.classList.add("lvl-expert");
 
-    input.addEventListener("focus", () => { begin(f.key); typing = null; });
+    input.addEventListener("focus", () => { begin(f.key); if (f.hl) highlighter.setFocus(f.hl); typing = null; });
     input.addEventListener("blur", () => {
       typing = null; activeKey = null;
-      highlighter.clearFocus(f.key);
+      highlighter.clearFocus(f.hl || f.key);
       paintOne(f.key, getVM());
     });
     input.addEventListener("input", () => {
       if (input.readOnly) return;
+      if (lockState(f.key)) return;
       typing = f.key;
       if (auto && auto.checked) auto.checked = false;
       const ok = commit(f.key, input.value);
@@ -4754,7 +5128,7 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
     };
     up.addEventListener("pointerdown", press(1));
     dn.addEventListener("pointerdown", press(-1));
-    rows.set(f.key, { f, row, input, slot, auto, unitBtns, unit, lock: row.querySelector(".f-lock") });
+    rows.set(f.key, { f, row, input, slot, auto, unitBtns, unit, lock: row.querySelector(".f-lock"), lockBtn, heldMark, route: row.querySelector(".f-route"), routeKey: f.key, routeSig: "" });
     return row;
   }
 
@@ -4770,8 +5144,10 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
     for (const b of [tapered, straight]) {
       b.addEventListener("click", () => {
         store.beginEdit("shape");
-        store.setField("shape", b.getAttribute("data-shape"));
-        onStatus(b.getAttribute("data-shape") === "straight" ? "Straight part set to gap + sheet thickness." : "Straight part set to 0.");
+        const ok = store.setField("shape", b.getAttribute("data-shape"));
+        const r = store.route, desc = r && describeRoute(r, r.before, fmtVal, store.locks);
+        if (desc) onStatus(desc.first);
+        else if (ok) onStatus(b.getAttribute("data-shape") === "straight" ? "Straight part set to gap + sheet thickness" + (store.design.straightPast ? " + " + F.trim(store.design.straightPast, 2) + " mm" : "") + "." : "Straight part set to 0.");
       });
       b.addEventListener("focus", () => highlighter.setFocus("pinStraight"));
       b.addEventListener("blur", () => highlighter.clearFocus("pinStraight"));
@@ -4810,6 +5186,105 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
     return row;
   }
 
+  // ---- locks ----
+  // "locked", "held" (fixed by other locks) or null
+  function lockState(key) {
+    if (store.locks.includes(key)) return "locked";
+    if (heldBy(store.locks)[key]) return "held";
+    return null;
+  }
+  function listNames(keys) {
+    const n = keys.map(nameOf);
+    return n.length <= 1 ? n.join("") : n.slice(0, -1).join(", ") + " and " + n[n.length - 1];
+  }
+  function lockMessage(key) {
+    const lk = lockState(key), name = FIELD[key] ? FIELD[key].name : nameOf(key);
+    if (lk === "locked") return name + " is locked. Unlock it to change it.";
+    return name + " is held by the locks on " + listNames(heldBy(store.locks)[key]) + ". Unlock one to change it.";
+  }
+  // A value with its unit, the way the boxes show it: "6 in", "280.3°", "46.21 mm".
+  function fmtVal(k, v) {
+    if (!isFinite(v)) return "—";
+    if (k === "travel") return unitsIn() ? F.trim(v / 25.4, 2) + " in" : F.trim(v, 1) + " mm";
+    if (k === "rotation" || k === "taper") return F.trim(v, 1) + "°";
+    if (k === "teeth") return String(Math.round(v)) + " pins";
+    return F.trim(v, k === "P" ? 3 : 2) + " mm";
+  }
+
+  // The note or chooser under the edited box. Rebuilt only when it changes,
+  // so keyboard focus on a chooser option survives redraws.
+  let lastStatus = "";
+  function paintRoute(key, row) {
+    if (!row.route) return;
+    const r = store.route;
+    const show = r && r.key === key && (r.refused || r.editId === store.session.editId);
+    if (!show) { if (row.routeSig) { row.route.hidden = true; row.route.innerHTML = ""; row.routeSig = ""; } return; }
+    const desc = describeRoute(r, r.before, fmtVal, store.locks);
+    const choose = store.settings.moveChoice === "choose" && !r.refused && r.options.length > 0 && !!r.options[0].mover;
+    const lines = choose ? optionLines(r, r.before, fmtVal) : [];
+    const sig = JSON.stringify([r.refused, desc && desc.text, lines.map(l => l.text), r.mover, choose]);
+    if (desc && desc.first !== lastStatus) { lastStatus = desc.first; onStatus(desc.first); }
+    if (sig === row.routeSig) return;
+    const hadFocus = row.route.contains(document.activeElement) ? document.activeElement.getAttribute("data-mover") : null;
+    row.routeSig = sig;
+    row.route.innerHTML = "";
+    if (r.refused) {
+      row.route.className = "f-route refused";
+      row.route.append(h("span.rt-ic", { html: svgIcon("stopSign", 16) }), h("span", desc.text));
+    } else if (choose && lines.length > 1) {
+      row.route.className = "f-route chooser";
+      const group = h("div.rt-opts", { role: "radiogroup", "aria-label": "What moves to make room" });
+      const btns = lines.map(l => {
+        const on = l.mover === r.mover;
+        const b = h("button.rt-opt", { type: "button", role: "radio", "aria-checked": String(on), tabindex: on ? "0" : "-1", "data-mover": l.mover }, h("span.rt-dot", { "aria-hidden": "true" }), l.text);
+        b.addEventListener("click", () => pick(l.mover));
+        return b;
+      });
+      group.addEventListener("keydown", e => {
+        const i = btns.indexOf(document.activeElement);
+        if (i < 0) return;
+        let j = -1;
+        if (e.key === "ArrowDown" || e.key === "ArrowRight") j = (i + 1) % btns.length;
+        else if (e.key === "ArrowUp" || e.key === "ArrowLeft") j = (i - 1 + btns.length) % btns.length;
+        if (j < 0) return;
+        e.preventDefault();
+        pick(lines[j].mover, true);
+      });
+      group.append(...btns);
+      row.route.append(h("div.rt-head", "What moves to make room?"), group);
+      if (desc) row.route.append(h("p.rt-note", desc.text));
+    } else if (desc || (choose && lines.length === 1)) {
+      row.route.className = "f-route note";
+      const text = desc ? desc.text : "Only " + lines[0].name + " can move. " + whyFor(r.key, lines[0].mover) + " " + lines[0].text + ".";
+      row.route.append(h("span.rt-ic", { html: svgIcon("info", 16) }), h("span", text));
+    } else {
+      row.route.hidden = true; row.routeSig = ""; return;
+    }
+    row.route.hidden = false;
+    if (hadFocus) { const b = row.route.querySelector('[data-mover="' + hadFocus + '"]'); if (b) b.focus({ preventScroll: true }); }
+    function pick(mover, keyboard) {
+      if (store.chooseMover(mover)) onStatus(nameOf(mover) + " moves to make room.");
+      if (keyboard) setTimeout(() => { const b = row.route.querySelector('[data-mover="' + mover + '"]'); if (b) b.focus({ preventScroll: true }); }, 0);
+    }
+  }
+
+  // "Keep the tip round": a check box that sets the Tip size lock.
+  function lockCheckField(f) {
+    const cb = h("input", { type: "checkbox", id: "f-" + f.key });
+    const row = h("div.field.check", { "data-field": f.key, "data-hl": f.hl || f.lockKey },
+      h("div.f-row", cb, h("label", { for: "f-" + f.key }, h("span.f-name", f.name), " ", h("span.f-term", "(" + f.term + ")")),
+        h("button.qmark", { type: "button", "aria-label": "What is " + f.name + "?", "data-explain": f.key, text: "?" })),
+      h("div.f-hint", f.hint));
+    cb.addEventListener("focus", () => highlighter.setFocus(f.hl || f.lockKey));
+    cb.addEventListener("blur", () => highlighter.clearFocus(f.hl || f.lockKey));
+    cb.addEventListener("change", () => {
+      store.toggleLock(f.lockKey, cb.checked);
+      onStatus(cb.checked ? "The tip keeps its size. The side slant changes instead." : "The side slant stays. The tip size changes instead.");
+    });
+    rows.set(f.key, { f, row, lockcheck: cb });
+    return row;
+  }
+
   // ---- build ----
   pane.innerHTML = "";
   if (examples && examples.length) {
@@ -4830,7 +5305,7 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
     groupBoxes[g.id] = fs;
   }
   for (const f of FIELDS) {
-    const el = f.type === "shape" ? shapeField(f) : f.type === "hub" ? hubField(f) : f.type === "check" ? checkField(f) : numField(f);
+    const el = f.type === "shape" ? shapeField(f) : f.type === "hub" ? hubField(f) : f.type === "check" ? checkField(f) : f.type === "lockcheck" ? lockCheckField(f) : numField(f);
     groupBoxes[f.group].appendChild(el);
   }
   const studentNote = h("p.student-note", "More settings (gap, tip, hub, drill guide, CNC sheet) are in Expert detail. Pick View ▸ Expert detail.");
@@ -4845,11 +5320,30 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
   function paintOne(key, vm) {
     const r = rows.get(key); if (!r) return;
     const d = store.design;
+    if (r.f.showIf) r.row.hidden = !r.f.showIf(d);
     if (r.input) {
       const locked = isLocked(d, key);
-      r.input.readOnly = locked;
+      const lk = lockState(key);
+      r.input.readOnly = locked || !!lk;
       r.row.classList.toggle("locked", locked);
+      r.row.classList.toggle("is-locked", lk === "locked");
+      r.row.classList.toggle("is-held", lk === "held");
       if (r.lock) r.lock.hidden = !locked;
+      if (r.lockBtn) {
+        const on = lk === "locked";
+        r.lockBtn.setAttribute("aria-pressed", String(on));
+        const label = (on ? "Unlock " : "Lock ") + r.f.name;
+        r.lockBtn.setAttribute("aria-label", label); r.lockBtn.title = label;
+        const icon = on ? "lock" : "unlock";
+        if (r.lockBtn.dataset.icon !== icon) { r.lockBtn.innerHTML = svgIcon(icon, 16); r.lockBtn.dataset.icon = icon; }
+      }
+      if (r.heldMark) {
+        r.heldMark.hidden = lk !== "held";
+        const by = held[key];
+        const t = by ? "Held: the locks on " + listNames(by) + " fix this number." : "";
+        r.heldMark.title = t; r.heldMark.setAttribute("aria-label", t || "held");
+      }
+      paintRoute(key, r);
       if (typing !== key) { r.input.value = displayValue(key, vm); r.input.classList.remove("partial"); }
       if (key === "travel") {
         r.unit.textContent = "";
@@ -4858,7 +5352,7 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
       if (r.auto) r.auto.checked = d[key] == null;
       const edited = vm.edited(key) || (key === "travel" && vm.edited("travel"));
       r.row.classList.toggle("changed", edited);
-      r.input.title = edited ? "You changed this" : "";
+      r.input.title = lk === "held" ? r.heldMark.title : lk === "locked" ? r.f.name + " is locked." : edited ? "You changed this" : "";
       const b = edited ? null : vm.badge(badgeKey(key));
       r.slot.textContent = b ? b.text : "";
       r.slot.className = "bdg-slot" + (b ? " bdg " + b.cls : "");
@@ -4872,13 +5366,19 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
       r.note.textContent = d.shape === "custom" ? "Custom shape" : "";
     } else if (r.sel) {
       r.sel.value = d.hub;
+    } else if (r.lockcheck) {
+      r.lockcheck.checked = store.locks.includes(r.f.lockKey);
     } else if (r.cb) {
       r.cb.checked = !!d[key];
       r.row.classList.toggle("locked", isLocked(d, key));
     }
   }
 
-  function paint(vm) { for (const key of rows.keys()) paintOne(key, vm); }
+  let held = {};
+  function paint(vm) {
+    held = heldBy(store.locks);
+    for (const key of rows.keys()) paintOne(key, vm);
+  }
 
   return {
     paint,
@@ -5267,6 +5767,8 @@ function start() {
     lineUp(v) { store.setSettings({ lineUp: v }); },
     animateBy(v) { store.setSettings({ animateBy: v }); },
     part(v) { store.setSettings({ part: v }); },
+    moveChoice(v) { store.setSettings({ moveChoice: v }); setStatus(v === "choose" ? "You'll choose what moves when a change needs room." : "The planner picks what moves."); },
+    unlockAll() { for (const k of [...store.locks]) store.toggleLock(k, false); setStatus("All boxes unlocked."); },
     example(id) {
       const ex = EXAMPLES.find(e => e.id === id);
       if (!ex) return;
@@ -5342,6 +5844,7 @@ function start() {
       { label: "&Redo", cmd: "redo", accel: "Ctrl+Y", enabled: () => store.canRedo },
       "-",
       { label: "&Clear change badges", cmd: "clearBadges" },
+      { label: "Unlock &all boxes", cmd: "unlockAll", enabled: () => store.locks.length > 0 },
       { label: "Reset &design", cmd: "resetDesign" }
     ] },
     { id: "view", label: "&View", items: [
@@ -5354,6 +5857,9 @@ function start() {
       { label: "&All dimension labels", cmd: "labels", arg: "all", radio: true, checked: () => S().dimLabels === "all" },
       { label: "&Key labels only", cmd: "labels", arg: "key", radio: true, checked: () => S().dimLabels === "key" },
       { label: "&No labels", cmd: "labels", arg: "none", radio: true, checked: () => S().dimLabels === "none" },
+      "-",
+      { label: "When a change moves numbers: &let me choose", cmd: "moveChoice", arg: "choose", radio: true, checked: () => S().moveChoice === "choose" },
+      { label: "When a change moves numbers: &pick for me", cmd: "moveChoice", arg: "auto", radio: true, checked: () => S().moveChoice === "auto" },
       "-",
       { label: "Se&ttings…", cmd: "settings" }
     ] },
@@ -5743,6 +6249,7 @@ const TABS = [
   ] },
   { id: "mot", title: "Motion and hub", rows: [
     { key: "speed", label: "Animation speed", type: "radio", opts: [["auto", "Normal, or off if the device asks for less motion"], ["slow", "Slow"], ["normal", "Normal"], ["fast", "Fast"], ["off", "Off"]] },
+    { key: "moveChoice", label: "When a change moves other numbers", type: "radio", opts: [["choose", "Let me choose"], ["auto", "Pick for me (automatic)"]], note: "Let me choose shows what could move, under the box you change." },
     { key: "direction", label: "Turn direction", type: "radio", opts: [["cw", "Clockwise"], ["ccw", "Counterclockwise"]], note: "Only mirrors the drawings and which way the sheet slides." },
     { key: "hub", label: "Hub", type: "hub", opts: [["gobilda", "goBILDA 32 mm hub"], ["custom", "Custom (unlocks the hub mount settings)"]] }
   ] }

@@ -29,6 +29,7 @@ const TABS = [
   ] },
   { id: "mot", title: "Motion and hub", rows: [
     { key: "speed", label: "Animation speed", type: "radio", opts: [["auto", "Normal, or off if the device asks for less motion"], ["slow", "Slow"], ["normal", "Normal"], ["fast", "Fast"], ["off", "Off"]] },
+    { key: "moveChoice", label: "When a change moves other numbers", type: "radio", opts: [["choose", "Let me choose"], ["auto", "Pick for me (automatic)"]], note: "Let me choose shows what could move, under the box you change." },
     { key: "direction", label: "Turn direction", type: "radio", opts: [["cw", "Clockwise"], ["ccw", "Counterclockwise"]], note: "Only mirrors the drawings and which way the sheet slides." },
     { key: "hub", label: "Hub", type: "hub", opts: [["gobilda", "goBILDA 32 mm hub"], ["custom", "Custom (unlocks the hub mount settings)"]] }
   ] }

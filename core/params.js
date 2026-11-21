@@ -27,6 +27,7 @@ const BASE = {
   holeD: 4.5, sheetT: 1.5, gap: 0.4,
   // pins
   pinW: 4.0, pinStraight: 0, pinH: 2.6, tipD: 2.0, pinFlat: 0.7, shape: "tapered",
+  straightPast: 0,             // Straight shape: the straight part runs this far past the sheet top
   // body and hub
   drumW: 5, hub: "gobilda", ...GOBILDA_HUB,
   // drill guide

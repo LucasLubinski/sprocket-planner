@@ -114,3 +114,60 @@ test("Hub settings change only the hub", () => {
   const back = applyField(b, "hub", "gobilda");
   assert.equal(back.boltSquare, 16);
 });
+
+// ---------------- locks: what moves instead ----------------
+const L = require("../state/link.js");
+const { defaultDesign: dd } = require("../core/params.js");
+const val = (r, k) => L.valueOf(r.design, k);
+const close = (a, e, tol, what) => assert.ok(Math.abs(a - e) <= tol, `${what}: got ${a}, expected ${e}`);
+
+test("locks: slide locked, wheel size 60 -> the wheel turns 280.3°", () => {
+  const r = L.route(dd(), "drumD", 60, { locks: ["travel"] });
+  assert.equal(r.mover, "rotation");
+  close(val(r, "rotation"), 280.32, 0.01, "turn");
+  assert.equal(r.design.travel, 152.4);
+});
+
+test("locks: hole spacing locked, pins 16 -> 24 -> 240°, spacing 9.525", () => {
+  const r = L.route(dd(), "teeth", 24, { locks: ["P"] });
+  close(val(r, "rotation"), 240, 1e-9, "turn");
+  close(val(r, "P"), 9.525, 1e-9, "spacing");
+});
+
+test("locks: turn and slide locked fix the wheel; changing it is refused with a plain message", () => {
+  const locks = ["rotation", "travel"];
+  const r = L.route(dd(), "drumD", 60, { locks });
+  assert.equal(r.refused, true);
+  assert.deepEqual(Object.keys(L.heldBy(locks)).sort(), ["drumD", "pitchD"]);
+  assert.deepEqual(Object.keys(L.heldBy([...locks, "teeth"])).sort(), ["P", "drumD", "pitchD"]);
+  const m = L.describeRoute(r, dd(), (k, v) => v.toFixed(1), locks);
+  assert.equal(m.text, "Can't change Wheel size. Sheet slides and Wheel turns are both locked. Together they fix the wheel size. Unlock one.");
+});
+
+test("locks: pins are never picked to move", () => {
+  for (const movers of Object.values(L.MOVERS)) assert.ok(!movers.includes("teeth"));
+});
+
+test("locks: tip locked, width 4.4 -> slant 32.4°; height 4.0 -> slant 17.6°", () => {
+  close(val(L.route(dd(), "pinW", 4.4, { locks: ["tipD"] }), "taper"), 32.4, 0.05, "width");
+  close(val(L.route(dd(), "pinH", 4.0, { locks: ["tipD"] }), "taper"), 17.6, 0.05, "height");
+  close(val(L.route(dd(), "pinH", 4.0), "tipD"), -0.53, 0.005, "unlocked: the pin comes to a point");
+});
+
+test("chooser: wheel size 60 offers Sheet slides 7.71 in (usual) or Wheel turns 280.3°", () => {
+  const r = L.route(dd(), "drumD", 60);
+  const fmt = (k, v) => k === "travel" ? (v / 25.4).toFixed(2) + " in" : v.toFixed(1) + "°";
+  assert.deepEqual(L.optionLines(r, dd(), fmt).map(o => o.text), ["Sheet slides: 6.00 in → 7.71 in", "Wheel turns: 360.0° → 280.3°"]);
+  assert.equal(L.route(dd(), "drumD", 60, { mover: "rotation" }).mover, "rotation");
+  assert.deepEqual(L.route(dd(), "drumD", 60, { locks: ["travel"] }).options.map(o => o.mover), ["rotation"], "a locked number is never an option");
+});
+
+test("pin options: straight past the sheet, and Straight with the tip kept round", () => {
+  let d = L.applyField(dd(), "shape", "straight");
+  d = L.applyField(d, "straightPast", 0.5);
+  close(d.pinStraight, 2.4, 1e-9, "gap + thickness + 0.5");
+  close(L.applyField(d, "sheetT", 2).pinStraight, 2.9, 1e-9, "follows the thickness");
+  close(L.applyField(d, "straightPast", -5).pinStraight, 0, 1e-9, "never below 0");
+  const r = L.route(dd(), "shape", "straight", { locks: ["tipD"] });
+  close(r.design.taper, 68.9, 0.05, "slant"); close(r.design.tipD, 2, 1e-9, "tip");
+});
