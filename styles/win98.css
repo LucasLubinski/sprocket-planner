@@ -158,6 +158,8 @@ input.bad { background: #ffe5e5; box-shadow: inset 0 0 0 2px var(--bad); }
 .bdg.down, .bdg.worse { color: var(--bad); }
 .bdg.same { color: var(--same); }
 .bdg-slot:empty { display: none; }
+/* inside a drawing, px means drawing units (mm): size badges from their label */
+svg.drw text .bdg { font-size: 0.93em; }
 svg.drw .bdg.up, svg.drw .bdg.better { fill: var(--good); }
 svg.drw .bdg.down, svg.drw .bdg.worse { fill: var(--bad); }
 svg.drw .bdg.same { fill: var(--same); }

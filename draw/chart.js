@@ -15,8 +15,9 @@ function render(container, vm) {
   const m = vm.model;
   const W = Math.max(280, container.clientWidth || 600);
   const H = W < 480 ? 230 : 250;
-  if (!m.ok) {
-    container.innerHTML = '<svg class="drw chart" viewBox="0 0 ' + W + " " + 80 + '" style="width:' + W + 'px" role="img" aria-label="Chart unavailable"><text class="lbl msg" x="' + W / 2 + '" y="44" text-anchor="middle" font-size="14">Fix the red boxes to see the chart.</text></svg>';
+  if (!m.ok || !isFinite(m.v.tight)) {
+    const msg = !m.ok ? "Fix the red boxes to see the chart." : "Holes run together: no plastic between them. Use fewer pins.";
+    container.innerHTML = '<svg class="drw chart" viewBox="0 0 ' + W + " " + 80 + '" style="width:' + W + 'px" role="img" aria-label="Chart unavailable"><text class="lbl msg" x="' + W / 2 + '" y="44" text-anchor="middle" font-size="14">' + esc(msg) + '</text></svg>';
     return { animate() {} };
   }
   const step = m.d.step;
@@ -24,8 +25,9 @@ function render(container, vm) {
   const series = [{ tr: m.trace, cls: "main" }];
   if (expert) { series.push({ tr: m.lo.trace, cls: "lo" }); series.push({ tr: m.hi.trace, cls: "hi" }); }
   let ymin = Infinity, ymax = -Infinity;
-  for (const s of series) for (const [, g] of s.tr) { ymin = Math.min(ymin, g); ymax = Math.max(ymax, g); }
-  for (const gh of vm.ghosts) if (gh.m.ok) for (const [, g] of gh.m.trace) { ymin = Math.min(ymin, g); ymax = Math.max(ymax, g); }
+  const span = g => { if (isFinite(g)) { ymin = Math.min(ymin, g); ymax = Math.max(ymax, g); } };
+  for (const s of series) for (const [, g] of s.tr) span(g);
+  for (const gh of vm.ghosts) if (gh.m.ok) for (const [, g] of gh.m.trace) span(g);
   ymin = Math.min(-0.05, ymin - 0.02); ymax = Math.max(0.3, ymax + 0.03);
   ymax = Math.min(ymax, Math.max(1.5, m.v.tight + 0.6));
   const ml = 58, mr = 14, mt = 14, mb = 44;
@@ -57,12 +59,12 @@ function render(container, vm) {
   for (const gh of vm.ghosts) {
     if (!gh.m.ok) continue;
     const gs = gh.m.d.step;
-    const pts = gh.m.trace.filter(([th]) => th <= step + 1e-9).map(([th, g]) => n(X(th * step / gs)) + "," + n(Y(g))).join(" ");
+    const pts = gh.m.trace.filter(([th, g]) => th <= step + 1e-9 && isFinite(g)).map(([th, g]) => n(X(th * step / gs)) + "," + n(Y(g))).join(" ");
     out.push('<g class="ghost ' + gh.cls + '"><polyline class="gl" points="' + pts + '"/></g>');
   }
   // traces
   for (const s of series) {
-    const pts = s.tr.map(([th, g]) => n(X(th)) + "," + n(Y(g))).join(" ");
+    const pts = s.tr.filter(([, g]) => isFinite(g)).map(([th, g]) => n(X(th)) + "," + n(Y(g))).join(" ");
     out.push('<polyline class="d trace ' + s.cls + '" data-key="' + (s.cls === "main" ? "tight" : s.cls === "lo" ? "loTight gap" : "hiTight gap") + '" points="' + pts + '"/>');
   }
   if (expert) {
@@ -90,6 +92,7 @@ function render(container, vm) {
       const th = ((theta % step) + step) % step;
       const i = Math.round(th / step * (m.trace.length - 1));
       const g = m.trace[Math.max(0, Math.min(m.trace.length - 1, i))][1];
+      if (!isFinite(g)) return;
       now.setAttribute("transform", "translate(" + n(X(th)) + " 0)");
       now.querySelector("circle").setAttribute("cy", n(Y(g)));
     }

@@ -4,7 +4,7 @@
 // red when it hits. Hole-spacing dimension on the nearest two holes.
 const G = require("../core/geometry.js");
 const L = require("./layout.js");
-const { Sketch, D2R, n } = require("./svg.js");
+const { Sketch, D2R, n, textWidth } = require("./svg.js");
 
 function view(m) {
   const d = m.d, p = m.p;
@@ -52,15 +52,41 @@ function build(sk, vm) {
   sk.close();
   sk.close();
   sk.rect(v.x0, v.y0, v.x1, v.y1, "frame", { noGrow: true });
-  // labels that stay put
-  sk.text(v.x0 + sk.px(6), d.yb + p.sheetT + sk.px(6), vm.word("sheet", "sheet (side view)"), { anchor: "start", v: "bottom", cls: "note", px: 13 });
-  sk.text(v.x0 + sk.px(6), v.y0 + sk.px(6), vm.word("wheel", "drum"), { anchor: "start", v: "bottom", cls: "note", px: 13 });
+  // Labels live in two lanes outside the frame so they never cover a pin or a
+  // hole: the sheet note and hole spacing above, the wheel note and squeeze
+  // room below. The notes sit at the left end of each lane.
+  const ln = lanes(sk, v, vm);
+  sk.text(v.x0 + sk.px(2), ln.topText, ln.sheetNote, { anchor: "start", v: "bottom", cls: "note", px: 13 });
+  sk.text(v.x0 + sk.px(2), ln.botText, ln.wheelNote, { anchor: "start", v: "top", cls: "note", px: 13 });
   // dynamic: squeeze-room line and the hole-spacing dimension
   sk.open({ id: "cu-gap" }); sk.close();
   sk.open({ id: "cu-pitch" }); sk.close();
-  // room for the dynamic labels
-  sk.grow(v.x0, v.y1 + sk.fs * 2.4);
-  sk.grow(v.x0, v.y0 - sk.fs * 1.6);
+  // room for the lanes
+  sk.grow(v.x0, ln.topText + sk.fs * 1.15);
+  sk.grow(v.x0, ln.botText - sk.fs * 1.2);
+}
+
+// Lane positions (world mm) and the free span (left edge) for dynamic labels.
+function lanes(sk, v, vm) {
+  const sheetNote = vm.word("sheet", "sheet (side view)"), wheelNote = vm.word("wheel", "drum");
+  const topLine = v.y1 + sk.px(10);
+  return {
+    sheetNote, wheelNote, topLine,
+    topText: topLine + sk.px(5),
+    botText: v.y0 - sk.px(6),
+    topFree: v.x0 + sk.px(2) + textWidth(sheetNote, 13) / sk.s + sk.px(12),
+    botFree: v.x0 + sk.px(2) + textWidth(wheelNote, 13) / sk.s + sk.px(12)
+  };
+}
+
+// Center for a label of width w (mm) near cx, kept inside [lo, hi].
+function clampCenter(cx, w, lo, hi) {
+  if (hi - lo <= w) return (lo + hi) / 2;
+  return Math.max(lo + w / 2, Math.min(hi - w / 2, cx));
+}
+
+function labelW(sk, str, badge) {
+  return (textWidth(str, sk.fontPx) + (badge ? textWidth(" " + badge.text, sk.fontPx * 0.93, true) : 0)) / sk.s;
 }
 
 function animate(svg, vm, theta, sk) {
@@ -77,25 +103,25 @@ function animate(svg, vm, theta, sk) {
   const g = G.minGap(p, d, theta);
   for (const el of svg.querySelectorAll("#cu-wheel .pin")) el.classList.remove("near", "hit", "closest");
   const pinEl = g.j !== undefined ? svg.querySelector('#cu-wheel .pin[data-pin="' + g.j + '"]') : null;
-  const state = g.d <= 0 ? "hit" : g.d < 0.1 ? "near" : "ok";
+  const none = !(g.d < 1e8); // holes run together: no plastic to measure against
+  const state = none || g.d <= 0 ? "hit" : g.d < 0.1 ? "near" : "ok";
   if (pinEl) { pinEl.classList.add("closest"); if (state !== "ok") pinEl.classList.add(state); }
 
   const sub = new Sketch({ scale: sk.s, dir, fontPx: sk.fontPx, id: "cu-g" });
-  const top = d.yb + p.sheetT;
-  const label = (g.d <= 0 ? vm.word("hits! overlap ", "binding: overlap ") + vm.fmt("tight", -g.d) : vm.word("squeeze room ", "clearance ") + vm.fmt("tight", g.d)) + " mm";
+  const ln = lanes(sk, v, vm);
+  const label = none ? "holes run together: no plastic between them" : (g.d <= 0 ? vm.word("hits! overlap ", "binding: overlap ") + vm.fmt("tight", -g.d) : vm.word("squeeze room ", "clearance ") + vm.fmt("tight", g.d)) + " mm";
+  // The squeeze-room label stays put in the lane under the frame (it doesn't
+  // jump around while the wheel turns); a leader runs to the gap.
+  const lw = labelW(sub, label), lx = clampCenter(0, lw, ln.botFree, v.x1);
   sub.open({ class: "d dim lvl-key gapline " + state, "data-key": "tight play pinW holeD" });
   if (g.p && g.q && g.d > 0) {
     sub.line(g.p[0], g.p[1], g.q[0], g.q[1], "gap-l");
     sub.circle(g.p[0], g.p[1], sub.px(2.5), "gap-dot"); sub.circle(g.q[0], g.q[1], sub.px(2.5), "gap-dot");
     const mx = (g.p[0] + g.q[0]) / 2, my = (g.p[1] + g.q[1]) / 2;
-    const lx = Math.max(v.x0 + sub.px(4), Math.min(v.x1 - sub.px(4), mx));
-    sub.line(mx, my, lx, top + sub.fs * 1.4, "dl");
-    sub.text(lx, top + sub.fs * 1.5, label, { anchor: lx > 0 ? "end" : "start", v: "bottom", cls: "gap-t" });
-  } else {
-    const pts = g.j !== undefined ? G.pinWorld(p, d, g.j, theta) : [[0, top]];
-    let tip = pts[0]; for (const q of pts) if (q[1] > tip[1]) tip = q;
-    sub.text(Math.max(v.x0, Math.min(v.x1, tip[0])), top + sub.fs * 1.5, label, { anchor: "middle", v: "bottom", cls: "gap-t" });
+    const ex = Math.max(lx - lw / 2 + sub.px(6), Math.min(lx + lw / 2 - sub.px(6), mx));
+    sub.line(mx, my, ex, ln.botText + sub.px(2), "dl");
   }
+  sub.text(lx, ln.botText, label, { anchor: "middle", v: "top", cls: "gap-t" });
   sub.close();
   const gapEl = svg.querySelector("#cu-gap");
   if (gapEl) gapEl.innerHTML = sub.out.join("");
@@ -106,8 +132,12 @@ function animate(svg, vm, theta, sk) {
   let c0 = k * d.P + slide;
   if (c0 < v.x0 + 0.5) { k++; c0 += d.P; }
   if (c0 + d.P <= v.x1 - 0.5) {
-    sub2.linear([c0, v.y0 + 0.1], [c0 + d.P, v.y0 + 0.1], [0, 0.0001], {
-      key: "P", level: "key", ext: false, label: vm.word("hole spacing ", "pitch ") + vm.num("P"), badge: vm.badge("P")
+    // Drawn in the lane above the frame; extension lines start above the pin tips.
+    const plabel = vm.word("hole spacing ", "pitch ") + vm.num("P"), pbadge = vm.badge("P");
+    const from = Math.min(v.y1, Math.max(d.yb + p.sheetT, d.tipR)) + sub2.px(3);
+    const cx = c0 + d.P / 2, lc = clampCenter(cx, labelW(sub2, plabel, pbadge), ln.topFree, v.x1);
+    sub2.linear([c0, from], [c0 + d.P, from], [0, ln.topLine - from], {
+      key: "P", level: "key", label: plabel, badge: pbadge, shift: lc - cx
     });
   }
   const pEl = svg.querySelector("#cu-pitch");

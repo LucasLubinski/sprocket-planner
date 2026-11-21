@@ -145,7 +145,7 @@ function build(sk, vm) {
     });
     sk.close();
   }
-  sk.text(X, base + sk.px(3), vm.word("wheel", "drum"), { anchor: "end", v: "bottom", cls: "note", px: 13 });
+  sk.text(X + sk.px(4), base / 2, vm.word("wheel", "drum"), { anchor: "start", v: "mid", cls: "note", px: 13 });
 }
 
 module.exports = { id: "pinhole", build, clipBase, fitOpts: () => ({ maxHeightPx: 460, maxScale: 70 }) };

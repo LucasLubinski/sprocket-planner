@@ -4,6 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
+import fs from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "../tools/build.mjs";
 import { launch, findChrome } from "../tools/cdp.mjs";
@@ -11,6 +12,7 @@ import { launch, findChrome } from "../tools/cdp.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const URL = pathToFileURL(path.join(ROOT, "dist", "planner.html")).href;
 const chrome = findChrome();
+const OVERLAP = fs.readFileSync(path.join(ROOT, "tools", "overlap.js"), "utf8");
 
 // Helpers that run inside the page.
 const HELPERS = `
@@ -209,6 +211,29 @@ test("planner UI in headless Chrome", { skip: !chrome && "Chrome not found", tim
       assert.equal(await ev(`__t.val("travel")`), "152.4", "units remembered");
       assert.equal(await ev(`__t.sp().store.saved.length`), 2, "saved designs remembered");
       assert.equal(await ev(`__t.val("rotation")`), "180", "current design remembered");
+    });
+
+    await t.test("drawing labels never cover a pin or a hole (8 to 40 pins, 1366 and 390 px)", async () => {
+      const found = [];
+      for (const [w, h] of [[1366, 768], [390, 844]]) {
+        await fresh(w, h);
+        await ev(OVERLAP + "; 1");
+        for (const detail of ["student", "expert"]) for (const teeth of [8, 16, 24, 40]) {
+          const r = await ev(`(async () => {
+            const sp = __t.sp(), st = sp.store;
+            st.setSettings({ detail: "${detail}", dimLabels: "all" });
+            st.beginEdit(); st.setField("teeth", 16); sp.renderNow();
+            st.beginEdit(); st.setField("teeth", ${teeth}); sp.renderNow();
+            await __t.settle();
+            const step = 360 / ${teeth}, all = [];
+            for (const f of [0, 0.25, 0.5, 0.75]) { sp.turnTo(step * f); for (const x of __labelHits()) all.push(x); }
+            sp.turnTo(0);
+            return [...new Set(all)];
+          })()`);
+          for (const x of r) found.push(w + " px, " + detail + ", " + teeth + " pins: " + x);
+        }
+      }
+      assert.deepEqual(found, []);
     });
 
     assert.deepEqual(page.errors, [], "no page errors during the run");

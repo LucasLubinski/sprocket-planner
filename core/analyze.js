@@ -13,16 +13,18 @@ const HEIGHT_STEP = 0.2;
 
 function sweep(p, n) {
   const d = G.derive(p);
-  const tr = G.trace(p, d, n);
-  let k = 0;
-  for (let i = 1; i < tr.length; i++) if (tr[i][1] < tr[k][1]) k = i;
-  return { d, trace: tr, tight: tr[k][1], tightAt: tr[k][0], play: d.play };
+  // When holes run together (hole spacing <= hole size) there is no plastic
+  // between them, so there is nothing to measure: those samples become NaN.
+  const tr = G.trace(p, d, n).map(([th, g]) => [th, g < 1e8 ? g : NaN]);
+  let k = -1;
+  for (let i = 0; i < tr.length; i++) if (isFinite(tr[i][1]) && (k < 0 || tr[i][1] < tr[k][1])) k = i;
+  return { d, trace: tr, tight: k < 0 ? NaN : tr[k][1], tightAt: k < 0 ? NaN : tr[k][0], play: d.play };
 }
 
 // Zones for the four fit meters. Each returns "red", "amber" or "green".
 const ZONES = {
   play: v => (v < 0.05 || v > 0.6) ? "red" : (v < 0.15 || v > 0.35) ? "amber" : "green",
-  tight: v => v < 0 ? "red" : v <= 0.08 ? "amber" : "green",
+  tight: v => !isFinite(v) || v < 0 ? "red" : v <= 0.08 ? "amber" : "green",
   web: v => v < 1.5 ? "red" : v <= 2.5 ? "amber" : "green",
   inSheet: v => v < 1 ? "red" : v < 1.5 ? "amber" : "green"
 };
@@ -83,7 +85,9 @@ function analyze(p) {
     "Pins hit the hole edges while turning. Use thinner pins, a steeper taper, or bigger holes.");
   else if (main.tight <= 0.08) add("fit", "warn", "Tight while turning",
     "Pins clear the holes by only " + f(main.tight, 3) + " mm. Thinner pins or bigger holes give more room.");
-  if (d.web < 1.5) add("web", "stop", "Holes too close",
+  if (!(d.web > 0)) add("web", "stop", "Holes run together",
+    "Holes overlap, so no plastic is left between them. Use fewer pins or a bigger turn-to-slide ratio.");
+  else if (d.web < 1.5) add("web", "stop", "Holes too close",
     "Holes too close: use fewer pins or a bigger turn-to-slide ratio.");
   else if (d.web <= 2.5) add("web", "warn", "Thin plastic between holes",
     "Only " + f(d.web, 2) + " mm of plastic between holes. It may crack. Use fewer pins.");
@@ -148,7 +152,9 @@ function analyze(p) {
   const level = id => { const c = checks.find(x => x.id === id); return c ? c.level : "ok"; };
   const chips = [
     { id: "holes", level: level("holes"), text: level("holes") === "ok" ? "Pins fit the holes" : "Pins wider than holes" },
-    { id: "fit", level: level("fit"), text: { ok: "Turns freely", warn: "Tight while turning", stop: "Pins hit hole edges" }[level("fit")] },
+    isFinite(main.tight)
+      ? { id: "fit", level: level("fit"), text: { ok: "Turns freely", warn: "Tight while turning", stop: "Pins hit hole edges" }[level("fit")] }
+      : { id: "fit", level: "stop", text: "No plastic for the pins to push" },
     { id: "web", level: level("web"), text: { ok: "Strong plastic between holes", warn: "Thin plastic between holes", stop: "Holes too close" }[level("web")] },
     { id: "hub", level: level("hub"), text: level("hub") === "ok" ? "Hub screws fit" : "Wheel too small for hub screws" },
     { id: "inSheet", level: level("inSheet"), text: f(d.inSheet, 1) + " pins in the sheet at once" },

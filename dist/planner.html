@@ -170,6 +170,8 @@ input.bad { background: #ffe5e5; box-shadow: inset 0 0 0 2px var(--bad); }
 .bdg.down, .bdg.worse { color: var(--bad); }
 .bdg.same { color: var(--same); }
 .bdg-slot:empty { display: none; }
+/* inside a drawing, px means drawing units (mm): size badges from their label */
+svg.drw text .bdg { font-size: 0.93em; }
 svg.drw .bdg.up, svg.drw .bdg.better { fill: var(--good); }
 svg.drw .bdg.down, svg.drw .bdg.worse { fill: var(--bad); }
 svg.drw .bdg.same { fill: var(--same); }
@@ -542,16 +544,18 @@ const HEIGHT_STEP = 0.2;
 
 function sweep(p, n) {
   const d = G.derive(p);
-  const tr = G.trace(p, d, n);
-  let k = 0;
-  for (let i = 1; i < tr.length; i++) if (tr[i][1] < tr[k][1]) k = i;
-  return { d, trace: tr, tight: tr[k][1], tightAt: tr[k][0], play: d.play };
+  // When holes run together (hole spacing <= hole size) there is no plastic
+  // between them, so there is nothing to measure: those samples become NaN.
+  const tr = G.trace(p, d, n).map(([th, g]) => [th, g < 1e8 ? g : NaN]);
+  let k = -1;
+  for (let i = 0; i < tr.length; i++) if (isFinite(tr[i][1]) && (k < 0 || tr[i][1] < tr[k][1])) k = i;
+  return { d, trace: tr, tight: k < 0 ? NaN : tr[k][1], tightAt: k < 0 ? NaN : tr[k][0], play: d.play };
 }
 
 // Zones for the four fit meters. Each returns "red", "amber" or "green".
 const ZONES = {
   play: v => (v < 0.05 || v > 0.6) ? "red" : (v < 0.15 || v > 0.35) ? "amber" : "green",
-  tight: v => v < 0 ? "red" : v <= 0.08 ? "amber" : "green",
+  tight: v => !isFinite(v) || v < 0 ? "red" : v <= 0.08 ? "amber" : "green",
   web: v => v < 1.5 ? "red" : v <= 2.5 ? "amber" : "green",
   inSheet: v => v < 1 ? "red" : v < 1.5 ? "amber" : "green"
 };
@@ -612,7 +616,9 @@ function analyze(p) {
     "Pins hit the hole edges while turning. Use thinner pins, a steeper taper, or bigger holes.");
   else if (main.tight <= 0.08) add("fit", "warn", "Tight while turning",
     "Pins clear the holes by only " + f(main.tight, 3) + " mm. Thinner pins or bigger holes give more room.");
-  if (d.web < 1.5) add("web", "stop", "Holes too close",
+  if (!(d.web > 0)) add("web", "stop", "Holes run together",
+    "Holes overlap, so no plastic is left between them. Use fewer pins or a bigger turn-to-slide ratio.");
+  else if (d.web < 1.5) add("web", "stop", "Holes too close",
     "Holes too close: use fewer pins or a bigger turn-to-slide ratio.");
   else if (d.web <= 2.5) add("web", "warn", "Thin plastic between holes",
     "Only " + f(d.web, 2) + " mm of plastic between holes. It may crack. Use fewer pins.");
@@ -677,7 +683,9 @@ function analyze(p) {
   const level = id => { const c = checks.find(x => x.id === id); return c ? c.level : "ok"; };
   const chips = [
     { id: "holes", level: level("holes"), text: level("holes") === "ok" ? "Pins fit the holes" : "Pins wider than holes" },
-    { id: "fit", level: level("fit"), text: { ok: "Turns freely", warn: "Tight while turning", stop: "Pins hit hole edges" }[level("fit")] },
+    isFinite(main.tight)
+      ? { id: "fit", level: level("fit"), text: { ok: "Turns freely", warn: "Tight while turning", stop: "Pins hit hole edges" }[level("fit")] }
+      : { id: "fit", level: "stop", text: "No plastic for the pins to push" },
     { id: "web", level: level("web"), text: { ok: "Strong plastic between holes", warn: "Thin plastic between holes", stop: "Holes too close" }[level("web")] },
     { id: "hub", level: level("hub"), text: level("hub") === "ok" ? "Hub screws fit" : "Wheel too small for hub screws" },
     { id: "inSheet", level: level("inSheet"), text: f(d.inSheet, 1) + " pins in the sheet at once" },
@@ -2011,8 +2019,9 @@ function render(container, vm) {
   const m = vm.model;
   const W = Math.max(280, container.clientWidth || 600);
   const H = W < 480 ? 230 : 250;
-  if (!m.ok) {
-    container.innerHTML = '<svg class="drw chart" viewBox="0 0 ' + W + " " + 80 + '" style="width:' + W + 'px" role="img" aria-label="Chart unavailable"><text class="lbl msg" x="' + W / 2 + '" y="44" text-anchor="middle" font-size="14">Fix the red boxes to see the chart.</text></svg>';
+  if (!m.ok || !isFinite(m.v.tight)) {
+    const msg = !m.ok ? "Fix the red boxes to see the chart." : "Holes run together: no plastic between them. Use fewer pins.";
+    container.innerHTML = '<svg class="drw chart" viewBox="0 0 ' + W + " " + 80 + '" style="width:' + W + 'px" role="img" aria-label="Chart unavailable"><text class="lbl msg" x="' + W / 2 + '" y="44" text-anchor="middle" font-size="14">' + esc(msg) + '</text></svg>';
     return { animate() {} };
   }
   const step = m.d.step;
@@ -2020,8 +2029,9 @@ function render(container, vm) {
   const series = [{ tr: m.trace, cls: "main" }];
   if (expert) { series.push({ tr: m.lo.trace, cls: "lo" }); series.push({ tr: m.hi.trace, cls: "hi" }); }
   let ymin = Infinity, ymax = -Infinity;
-  for (const s of series) for (const [, g] of s.tr) { ymin = Math.min(ymin, g); ymax = Math.max(ymax, g); }
-  for (const gh of vm.ghosts) if (gh.m.ok) for (const [, g] of gh.m.trace) { ymin = Math.min(ymin, g); ymax = Math.max(ymax, g); }
+  const span = g => { if (isFinite(g)) { ymin = Math.min(ymin, g); ymax = Math.max(ymax, g); } };
+  for (const s of series) for (const [, g] of s.tr) span(g);
+  for (const gh of vm.ghosts) if (gh.m.ok) for (const [, g] of gh.m.trace) span(g);
   ymin = Math.min(-0.05, ymin - 0.02); ymax = Math.max(0.3, ymax + 0.03);
   ymax = Math.min(ymax, Math.max(1.5, m.v.tight + 0.6));
   const ml = 58, mr = 14, mt = 14, mb = 44;
@@ -2053,12 +2063,12 @@ function render(container, vm) {
   for (const gh of vm.ghosts) {
     if (!gh.m.ok) continue;
     const gs = gh.m.d.step;
-    const pts = gh.m.trace.filter(([th]) => th <= step + 1e-9).map(([th, g]) => n(X(th * step / gs)) + "," + n(Y(g))).join(" ");
+    const pts = gh.m.trace.filter(([th, g]) => th <= step + 1e-9 && isFinite(g)).map(([th, g]) => n(X(th * step / gs)) + "," + n(Y(g))).join(" ");
     out.push('<g class="ghost ' + gh.cls + '"><polyline class="gl" points="' + pts + '"/></g>');
   }
   // traces
   for (const s of series) {
-    const pts = s.tr.map(([th, g]) => n(X(th)) + "," + n(Y(g))).join(" ");
+    const pts = s.tr.filter(([, g]) => isFinite(g)).map(([th, g]) => n(X(th)) + "," + n(Y(g))).join(" ");
     out.push('<polyline class="d trace ' + s.cls + '" data-key="' + (s.cls === "main" ? "tight" : s.cls === "lo" ? "loTight gap" : "hiTight gap") + '" points="' + pts + '"/>');
   }
   if (expert) {
@@ -2086,6 +2096,7 @@ function render(container, vm) {
       const th = ((theta % step) + step) % step;
       const i = Math.round(th / step * (m.trace.length - 1));
       const g = m.trace[Math.max(0, Math.min(m.trace.length - 1, i))][1];
+      if (!isFinite(g)) return;
       now.setAttribute("transform", "translate(" + n(X(th)) + " 0)");
       now.querySelector("circle").setAttribute("cy", n(Y(g)));
     }
@@ -2102,7 +2113,7 @@ defs["draw/closeup.js"] = { map: {"../core/geometry.js":"core/geometry.js","./la
 // red when it hits. Hole-spacing dimension on the nearest two holes.
 const G = require("../core/geometry.js");
 const L = require("./layout.js");
-const { Sketch, D2R, n } = require("./svg.js");
+const { Sketch, D2R, n, textWidth } = require("./svg.js");
 
 function view(m) {
   const d = m.d, p = m.p;
@@ -2150,15 +2161,41 @@ function build(sk, vm) {
   sk.close();
   sk.close();
   sk.rect(v.x0, v.y0, v.x1, v.y1, "frame", { noGrow: true });
-  // labels that stay put
-  sk.text(v.x0 + sk.px(6), d.yb + p.sheetT + sk.px(6), vm.word("sheet", "sheet (side view)"), { anchor: "start", v: "bottom", cls: "note", px: 13 });
-  sk.text(v.x0 + sk.px(6), v.y0 + sk.px(6), vm.word("wheel", "drum"), { anchor: "start", v: "bottom", cls: "note", px: 13 });
+  // Labels live in two lanes outside the frame so they never cover a pin or a
+  // hole: the sheet note and hole spacing above, the wheel note and squeeze
+  // room below. The notes sit at the left end of each lane.
+  const ln = lanes(sk, v, vm);
+  sk.text(v.x0 + sk.px(2), ln.topText, ln.sheetNote, { anchor: "start", v: "bottom", cls: "note", px: 13 });
+  sk.text(v.x0 + sk.px(2), ln.botText, ln.wheelNote, { anchor: "start", v: "top", cls: "note", px: 13 });
   // dynamic: squeeze-room line and the hole-spacing dimension
   sk.open({ id: "cu-gap" }); sk.close();
   sk.open({ id: "cu-pitch" }); sk.close();
-  // room for the dynamic labels
-  sk.grow(v.x0, v.y1 + sk.fs * 2.4);
-  sk.grow(v.x0, v.y0 - sk.fs * 1.6);
+  // room for the lanes
+  sk.grow(v.x0, ln.topText + sk.fs * 1.15);
+  sk.grow(v.x0, ln.botText - sk.fs * 1.2);
+}
+
+// Lane positions (world mm) and the free span (left edge) for dynamic labels.
+function lanes(sk, v, vm) {
+  const sheetNote = vm.word("sheet", "sheet (side view)"), wheelNote = vm.word("wheel", "drum");
+  const topLine = v.y1 + sk.px(10);
+  return {
+    sheetNote, wheelNote, topLine,
+    topText: topLine + sk.px(5),
+    botText: v.y0 - sk.px(6),
+    topFree: v.x0 + sk.px(2) + textWidth(sheetNote, 13) / sk.s + sk.px(12),
+    botFree: v.x0 + sk.px(2) + textWidth(wheelNote, 13) / sk.s + sk.px(12)
+  };
+}
+
+// Center for a label of width w (mm) near cx, kept inside [lo, hi].
+function clampCenter(cx, w, lo, hi) {
+  if (hi - lo <= w) return (lo + hi) / 2;
+  return Math.max(lo + w / 2, Math.min(hi - w / 2, cx));
+}
+
+function labelW(sk, str, badge) {
+  return (textWidth(str, sk.fontPx) + (badge ? textWidth(" " + badge.text, sk.fontPx * 0.93, true) : 0)) / sk.s;
 }
 
 function animate(svg, vm, theta, sk) {
@@ -2175,25 +2212,25 @@ function animate(svg, vm, theta, sk) {
   const g = G.minGap(p, d, theta);
   for (const el of svg.querySelectorAll("#cu-wheel .pin")) el.classList.remove("near", "hit", "closest");
   const pinEl = g.j !== undefined ? svg.querySelector('#cu-wheel .pin[data-pin="' + g.j + '"]') : null;
-  const state = g.d <= 0 ? "hit" : g.d < 0.1 ? "near" : "ok";
+  const none = !(g.d < 1e8); // holes run together: no plastic to measure against
+  const state = none || g.d <= 0 ? "hit" : g.d < 0.1 ? "near" : "ok";
   if (pinEl) { pinEl.classList.add("closest"); if (state !== "ok") pinEl.classList.add(state); }
 
   const sub = new Sketch({ scale: sk.s, dir, fontPx: sk.fontPx, id: "cu-g" });
-  const top = d.yb + p.sheetT;
-  const label = (g.d <= 0 ? vm.word("hits! overlap ", "binding: overlap ") + vm.fmt("tight", -g.d) : vm.word("squeeze room ", "clearance ") + vm.fmt("tight", g.d)) + " mm";
+  const ln = lanes(sk, v, vm);
+  const label = none ? "holes run together: no plastic between them" : (g.d <= 0 ? vm.word("hits! overlap ", "binding: overlap ") + vm.fmt("tight", -g.d) : vm.word("squeeze room ", "clearance ") + vm.fmt("tight", g.d)) + " mm";
+  // The squeeze-room label stays put in the lane under the frame (it doesn't
+  // jump around while the wheel turns); a leader runs to the gap.
+  const lw = labelW(sub, label), lx = clampCenter(0, lw, ln.botFree, v.x1);
   sub.open({ class: "d dim lvl-key gapline " + state, "data-key": "tight play pinW holeD" });
   if (g.p && g.q && g.d > 0) {
     sub.line(g.p[0], g.p[1], g.q[0], g.q[1], "gap-l");
     sub.circle(g.p[0], g.p[1], sub.px(2.5), "gap-dot"); sub.circle(g.q[0], g.q[1], sub.px(2.5), "gap-dot");
     const mx = (g.p[0] + g.q[0]) / 2, my = (g.p[1] + g.q[1]) / 2;
-    const lx = Math.max(v.x0 + sub.px(4), Math.min(v.x1 - sub.px(4), mx));
-    sub.line(mx, my, lx, top + sub.fs * 1.4, "dl");
-    sub.text(lx, top + sub.fs * 1.5, label, { anchor: lx > 0 ? "end" : "start", v: "bottom", cls: "gap-t" });
-  } else {
-    const pts = g.j !== undefined ? G.pinWorld(p, d, g.j, theta) : [[0, top]];
-    let tip = pts[0]; for (const q of pts) if (q[1] > tip[1]) tip = q;
-    sub.text(Math.max(v.x0, Math.min(v.x1, tip[0])), top + sub.fs * 1.5, label, { anchor: "middle", v: "bottom", cls: "gap-t" });
+    const ex = Math.max(lx - lw / 2 + sub.px(6), Math.min(lx + lw / 2 - sub.px(6), mx));
+    sub.line(mx, my, ex, ln.botText + sub.px(2), "dl");
   }
+  sub.text(lx, ln.botText, label, { anchor: "middle", v: "top", cls: "gap-t" });
   sub.close();
   const gapEl = svg.querySelector("#cu-gap");
   if (gapEl) gapEl.innerHTML = sub.out.join("");
@@ -2204,8 +2241,12 @@ function animate(svg, vm, theta, sk) {
   let c0 = k * d.P + slide;
   if (c0 < v.x0 + 0.5) { k++; c0 += d.P; }
   if (c0 + d.P <= v.x1 - 0.5) {
-    sub2.linear([c0, v.y0 + 0.1], [c0 + d.P, v.y0 + 0.1], [0, 0.0001], {
-      key: "P", level: "key", ext: false, label: vm.word("hole spacing ", "pitch ") + vm.num("P"), badge: vm.badge("P")
+    // Drawn in the lane above the frame; extension lines start above the pin tips.
+    const plabel = vm.word("hole spacing ", "pitch ") + vm.num("P"), pbadge = vm.badge("P");
+    const from = Math.min(v.y1, Math.max(d.yb + p.sheetT, d.tipR)) + sub2.px(3);
+    const cx = c0 + d.P / 2, lc = clampCenter(cx, labelW(sub2, plabel, pbadge), ln.topFree, v.x1);
+    sub2.linear([c0, from], [c0 + d.P, from], [0, ln.topLine - from], {
+      key: "P", level: "key", label: plabel, badge: pbadge, shift: lc - cx
     });
   }
   const pEl = svg.querySelector("#cu-pitch");
@@ -2935,7 +2976,7 @@ function build(sk, vm) {
     });
     sk.close();
   }
-  sk.text(X, base + sk.px(3), vm.word("wheel", "drum"), { anchor: "end", v: "bottom", cls: "note", px: 13 });
+  sk.text(X + sk.px(4), base / 2, vm.word("wheel", "drum"), { anchor: "start", v: "mid", cls: "note", px: 13 });
 }
 
 module.exports = { id: "pinhole", build, clipBase, fitOpts: () => ({ maxHeightPx: 460, maxScale: 70 }) };
@@ -5160,7 +5201,7 @@ const METERS = [
   { key: "play", name: "Wiggle room", term: "play per side", min: 0, max: 0.8, unit: "mm", prefix: "±",
     zone: v => v <= 0 ? ["red", "Pins too wide"] : v < 0.05 ? ["red", "Too tight"] : v < 0.15 ? ["amber", "Snug"] : v <= 0.35 ? ["green", "Just right"] : v <= 0.6 ? ["amber", "Loose"] : ["red", "Too loose"] },
   { key: "tight", name: "Squeeze room while turning", term: "tightest clearance", min: -0.2, max: 0.5, unit: "mm",
-    zone: v => v < 0 ? ["red", "Pins hit"] : v <= 0.08 ? ["amber", "Tight"] : ["green", "Turns freely"] },
+    zone: v => !isFinite(v) ? ["red", "No plastic between holes"] : v < 0 ? ["red", "Pins hit"] : v <= 0.08 ? ["amber", "Tight"] : ["green", "Turns freely"] },
   { key: "web", name: "Plastic between holes", term: "web", min: 0, max: 8, unit: "mm",
     zone: v => v < 1.5 ? ["red", "Too thin"] : v <= 2.5 ? ["amber", "Thin"] : ["green", "Strong"] },
   { key: "inSheet", name: "Pins in the sheet at once", term: "engagement", min: 0, max: 4, unit: "",
@@ -5190,7 +5231,7 @@ function renderMeters(box, vm) {
       if (!isFinite(gv)) continue;
       markers.appendChild(h("span", { class: "mk ghostmk " + g.cls, style: { left: pos(mt, gv) + "%" }, title: g.label + ": " + vm.fmt(mt.key, gv) }, h("span.mk-t", g.short)));
     }
-    markers.appendChild(h("span", { class: "mk nowmk", style: { left: pos(mt, v) + "%" } }, h("span.mk-t", "now")));
+    if (isFinite(v)) markers.appendChild(h("span", { class: "mk nowmk", style: { left: pos(mt, v) + "%" } }, h("span.mk-t", "now")));
     const valTxt = (mt.prefix || "") + vm.fmt(mt.key, v) + (mt.unit ? " " + mt.unit : "");
     const ariaMarks = (vm.marks || []).map(g => g.label + " " + vm.fmt(mt.key, g.m.v[mt.key])).join(", ");
     box.appendChild(h("div.meter", { "data-hl": mt.key, role: "group", "aria-label": mt.name },
@@ -5199,7 +5240,7 @@ function renderMeters(box, vm) {
         h("span.m-val", valTxt),
         b ? h("span", { class: "bdg " + b.cls, "aria-label": b.aria }, b.text) : null),
       h("div.m-body",
-        h("div.m-track", { role: "meter", "aria-valuemin": String(mt.min), "aria-valuemax": String(mt.max), "aria-valuenow": String(+v.toFixed(3)),
+        h("div.m-track", { role: "meter", "aria-valuemin": String(mt.min), "aria-valuemax": String(mt.max), "aria-valuenow": isFinite(v) ? String(+v.toFixed(3)) : undefined,
           "aria-valuetext": valTxt + ", " + word + (ariaMarks ? ". Also: " + ariaMarks : "") }, markers, segs),
         h("span", { class: "m-zone z-" + zone }, h("span.m-ic", { html: svgIcon(ICON[zone], 16) }), word)),
       h("div.m-scale", { "aria-hidden": "true" }, h("span", (mt.prefix || "") + vm.fmt(mt.key, mt.min, 1)), h("span", vm.fmt(mt.key, mt.max, 1) + (mt.unit ? " " + mt.unit : "")))));

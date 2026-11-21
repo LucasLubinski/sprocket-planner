@@ -85,3 +85,14 @@ test("sheet file numbers: length, width, row offset, track", () => {
   near(m.v.slotW, 41, 1e-12, "slot width");
   near(m.v.yb, 23.5052, 0.0001, "shaft to sheet underside");
 });
+
+test("40 pins: holes run together, so there is no squeeze room to measure", () => {
+  const m = analyze({ ...defaultDesign(), teeth: 40 });
+  assert.ok(m.ok);
+  assert.ok(m.v.web < 0, "hole spacing 3.81 is under the 4.5 mm hole");
+  assert.ok(Number.isNaN(m.v.tight), "no 1e9 stand-in value");
+  assert.ok(m.trace.every(([, g]) => Number.isNaN(g)));
+  assert.equal(m.zones.tight, "red");
+  assert.equal(m.checks.find(c => c.id === "web").title, "Holes run together");
+  assert.equal(m.chips.find(c => c.id === "fit").level, "stop");
+});
