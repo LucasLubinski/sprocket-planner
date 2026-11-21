@@ -243,6 +243,9 @@ svg.drw .head.cb { stroke-dasharray: none; fill: rgba(0,0,0,.08); }
 svg.drw .bsq { fill: none; stroke: var(--ink); stroke-width: 0.7px; stroke-dasharray: 2 3; }
 svg.drw .gob-l { fill: none; stroke: #0060ff; stroke-width: 1.2px; stroke-dasharray: 6 3; }
 svg.drw .cut { fill: var(--paper); stroke: var(--part-edge); stroke-width: 0.8px; }
+/* track end view */
+svg.drw .track { fill: #d9cfb4; stroke: var(--part-edge); stroke-width: 1px; }
+svg.drw .shaft { fill: var(--paper); stroke: var(--ink); stroke-width: 1.2px; }
 /* sheet pattern and guide */
 svg.drw .sheet-o { fill: var(--plastic); stroke: #0000ff; stroke-width: 1.2px; }
 svg.drw .hole-o { fill: var(--paper); stroke: #ff0000; stroke-width: 1px; }
@@ -476,6 +479,9 @@ svg.panel .endmark { stroke: var(--follow); stroke-width: 1px; stroke-dasharray:
   .spin button { width: 44px; min-width: 44px; height: 44px; min-height: 44px; font-size: 14px; line-height: 44px; }
   .qmark { width: 44px; height: 44px; min-height: 44px; }
   input[type=checkbox] + label, input[type=radio] + label { min-height: 44px; display: inline-flex; align-items: center; }
+  /* 98.css pins the radio circle to the label's top; center it in the taller label */
+  input[type=radio] + label::before { top: calc(50% - 6px); }
+  input[type=radio]:checked + label::after { top: calc(50% - 2px); }
   .playbar input[type=range] { height: 44px; }
   .unit-switch button { min-width: 48px; }
 }
@@ -500,6 +506,22 @@ svg.panel .endmark { stroke: var(--follow); stroke-width: 1px; stroke-dasharray:
   svg.drw.focus-mode .d { transition: none; }
 }
 .noscript { background: #fff; padding: 16px; margin: 16px; }
+
+/* ---- make it (export) ---- */
+.export { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 12px 24px; }
+.export h3 { font-size: 14px; margin: 4px 0 8px; }
+.exp-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.exp-btns button { display: inline-flex; align-items: center; gap: 6px; }
+.btn-ic { display: inline-flex; }
+.part-pick { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0 0 6px; }
+.trackbox { margin: 0 0 8px; }
+.trackbox .tb-row { display: grid; grid-template-columns: minmax(0, 15em) 1fr; gap: 2px 10px; padding: 3px 0; border-bottom: 1px dotted var(--shadow); }
+.trackbox dt { font-weight: bold; }
+.trackbox dd { margin: 0; }
+.trackbox .tb-row.pointed, .trackbox .tb-row.lit { background: var(--hl-bg, #ffff99); }
+@media (max-width: 420px) { .trackbox .tb-row { grid-template-columns: 1fr; } }
+.help ol { padding-left: 22px; margin: 6px 0; }
+.help li { margin: 4px 0; }
 
 </style>
 </head>
@@ -1056,6 +1078,78 @@ function normalizeDesign(d) {
 }
 
 module.exports = { GOBILDA_HUB, HUB_KEYS, SCAD_NAMES, DEFAULT_DESIGN, defaultDesign, normalizeDesign };
+
+} };
+defs["core/scad-template.js"] = { map: {}, fn: function (module, exports, require) {
+module.exports = "// ============================================================\n//  Pin sprocket that drives a perforated polycarbonate sheet,\n//  bolted to a 32 mm goBILDA / ServoCity 25T spline servo hub.\n//  (OpenSCAD 2021.01 or newer)\n//\n//  Turning the sprocket rotation_deg moves the sheet travel\n//  (default 360 degrees -> 6 in). Travel per full turn =\n//  teeth x hole spacing, so the hole spacing in the sheet is what\n//  sets the travel. The sprocket diameter is derived from it so\n//  the pins line up.\n//\n//  The companion \"Sprocket and sheet planner\" page has a\n//  \"Copy OpenSCAD settings\" button: paste its lines over the\n//  matching lines below.\n//\n//  The sheet slides flat past the sprocket (like a rack and\n//  pinion), held by a track so its underside sits\n//  \"axis to sheet underside\" mm from the servo shaft (see console).\n//\n//  part = \"sprocket\"    : the sprocket\n//  part = \"drill_guide\" : strip for drilling the sheet holes at the\n//                         exact spacing. Butt the fence against the\n//                         sheet edge, clamp, drill through every hole.\n//\n//  Modelled in print orientation, no supports needed.\n//  Everything is in the Customizer (Window > Customizer).\n// ============================================================\n\n/* [What to make] */\npart = \"sprocket\";            // [sprocket, drill_guide]\n\n/* [Motion] */\nrotation_deg = 360;           // how far the sprocket turns\ntravel       = 152.4;         // how far the sheet moves in that turn (mm), 6 in = 152.4\n\n/* [Sheet] */\nhole_d         = 4.5;         // holes in the sheet\nsheet_t        = 1.5;         // sheet thickness\nteeth          = 16;          // hole spacing = travel per full turn / teeth\n\n/* [Pins] */\npin_d        = 4.0;           // pin width at the drum (0.25 mm clearance each side in a 4.5 hole)\npin_straight = 0;             // pin stays full width this far above the drum before tapering\npin_tip_d    = 2.0;           // rounded tip, helps the pin find the hole\npin_h        = 2.6;           // pin height above the drum\nsheet_gap    = 0.4;           // gap between the drum and the underside of the sheet\npin_flat   = 0.7;             // pins are trimmed top and bottom to this fraction of pin_d so they print without supports\n\n/* [Body] */\ndrum_w = 5;                   // sprocket thickness\n\n/* [Hub mounting] */\nbolt_square  = 16;            // M4 tapped holes on the hub, square pattern (mm)\nbolt_hole_d  = 4.5;           // M4 clearance hole\nbolt_head_d  = 7.5;           // M4 socket head plus a little room\ncounterbore  = 0;             // sink the screw heads this deep (0 = heads sit on the face)\ncenter_d     = 8;             // centre hole, big enough to pass the servo screw head\npilot        = true;          // ring that drops into the hub's 14 mm recess\npilot_d      = 13.7;          // recess is 14 mm\npilot_h      = 1.2;           // short so it clears the servo screw head\n\n/* [Drill guide] */\nguide_holes   = 0;            // 0 = enough holes for the full travel\nedge_offset   = 8;            // sheet edge to the centreline of the holes\nguide_t       = 4;            // guide thickness\nguide_hole_d  = 4.7;          // printed holes shrink a little; 4.7 suits a 4.5 mm bit\n\n/* [Hidden] */\n$fn  = 64;\neps  = 0.01;\nN        = teeth;\ntravel_per_rev = travel * 360 / rotation_deg;\nP        = travel_per_rev / N;            // hole spacing in the sheet\nRp       = travel_per_rev / (2 * PI);     // pitch radius = sheet mid-plane\nyb       = Rp - sheet_t / 2;              // axis to sheet underside\nr0       = yb - sheet_gap;                // drum radius\ntip_r    = r0 + pin_h;\nslab_h   = pin_flat * pin_d;              // pin height across the sprocket (Z)\npin_z    = slab_h / 2;                    // pin centreline above the bed face\nbolt_r   = bolt_square / sqrt(2);\n\n// how much of the sheet is in contact at once, and holes needed for the travel\nphi_in       = acos(min(1, yb / tip_r));\nwindow       = 2 * tip_r * sin(phi_in);\nholes_needed = ceil(travel / P - 1e-9) + ceil(window / P - 1e-9) + 1;\nn_guide      = guide_holes > 0 ? guide_holes : holes_needed;\n\n// pin width at height u above the drum: the hull of the base cylinder and the tip ball.\n// The base itself sits below the sheet; what matters for fit is the width at u = sheet_gap.\nfunction pin_w_at(u) =\n    let(a = pin_d / 2, b = pin_tip_d / 2, s = pin_straight, c = pin_h - b,\n        dd = sqrt(a * a + (c - s) * (c - s)),\n        ang = dd > b ? atan2(s - c, a) + acos(b / dd) : 90,\n        tx = b * cos(ang), ty = c + b * sin(ang))\n    u <= s ? pin_d\n  : (dd > b && u <= ty) ? 2 * (a + (tx - a) * (u - s) / (ty - s))\n  : u <= c + b ? 2 * sqrt(max(0, b * b - (u - c) * (u - c)))\n  : 0;\n\ngrip     = drum_w - counterbore;\nscrew_l  = [for (l = [6, 8, 10, 12, 14, 16, 20, 25]) if (l >= grip + 4) l][0];\n\n// ---------- sanity checks ----------\nassert(part == \"sprocket\" || part == \"drill_guide\", \"part must be sprocket or drill_guide\");\nassert(rotation_deg > 0 && travel > 0, \"rotation_deg and travel must be above 0\");\nassert(pin_straight >= 0 && pin_straight < pin_h, \"pin_straight must be between 0 and pin_h\");\nassert(pin_w_at(sheet_gap) < hole_d,\n       str(\"pin is \", pin_w_at(sheet_gap), \" mm wide where it enters the sheet: it must be narrower than hole_d\"));\nassert(P - hole_d >= 1.5, str(\"holes would be only \", P - hole_d, \" mm apart: use fewer teeth\"));\nassert(pin_h > sheet_gap + sheet_t, \"pins are too short to reach through the sheet\");\nassert(2 * PI * r0 / N > pin_d + 1, \"too many teeth: pins would merge on the drum\");\nassert(r0 > bolt_r + bolt_head_d / 2 + 0.5, \"drum too small for the hub screws\");\nassert(slab_h < drum_w, \"pins are thicker than the drum\");\nassert(counterbore < drum_w - 1, \"counterbore leaves less than 1 mm under the screw heads\");\n\necho(str(\"SHEET DRIVE  \", rotation_deg, \" deg of turn moves the sheet \", travel, \" mm (\", travel / 25.4, \" in)\"));\necho(str(\"  teeth=\", N, \"  travel per full turn=\", travel_per_rev, \" mm\"));\necho(str(\"  hole spacing in the sheet = \", P, \" mm (\", P / 25.4, \" in), web between holes = \", P - hole_d, \" mm\"));\necho(str(\"  pin is \", pin_w_at(sheet_gap), \" mm wide where it enters the sheet, play +/-\", (hole_d - pin_w_at(sheet_gap)) / 2, \" mm\"));\necho(str(\"  axis to sheet underside = \", yb, \" mm   drum dia = \", 2 * r0, \"   over pins = \", 2 * tip_r));\necho(str(\"  pin centreline is \", drum_w - pin_z, \" mm from the hub face (\", pin_z, \" mm from the outer face)\"));\necho(str(\"  sheet needs at least \", holes_needed, \" holes for the full travel\"));\necho(str(\"  hub screws: 4 x M4 x \", screw_l, \" mm socket head\"));\n\n// ---------- sprocket ----------\nmodule pin() {\n    // tapered pin with a ball tip pointing along +X, trimmed flat top and bottom\n    intersection() {\n        hull() {\n            translate([-1, 0, 0]) rotate([0, 90, 0]) cylinder(d = pin_d, h = 1 + pin_straight + eps);\n            translate([pin_h - pin_tip_d / 2, 0, 0]) sphere(d = pin_tip_d, $fn = 32);\n        }\n        translate([-2, -pin_d, -slab_h / 2]) cube([pin_h + 4, 2 * pin_d, slab_h]);\n    }\n}\n\nmodule sprocket() {\n    difference() {\n        union() {\n            cylinder(r = r0, h = drum_w, $fn = 180);\n            for (i = [0 : N - 1])\n                rotate(i * 360 / N) translate([r0, 0, pin_z]) pin();\n            if (pilot)\n                translate([0, 0, drum_w - eps]) cylinder(d = pilot_d, h = pilot_h + eps);\n        }\n        // centre hole: reach / pass the servo screw\n        translate([0, 0, -1]) cylinder(d = center_d, h = drum_w + pilot_h + 2);\n        // M4 holes on the hub's 16 mm square (corners at 45 degrees)\n        for (a = [45 : 90 : 315])\n            rotate(a) translate([bolt_r, 0, 0]) {\n                translate([0, 0, -1]) cylinder(d = bolt_hole_d, h = drum_w + 2, $fn = 32);\n                if (counterbore > 0)\n                    translate([0, 0, -1]) cylinder(d = bolt_head_d, h = counterbore + 1, $fn = 32);\n            }\n    }\n}\n\n// ---------- drill guide ----------\n// Plate lies on the sheet; the fence catches the sheet edge.\n// Printed fence-up: the face the fence sticks out of goes on the sheet.\nmodule drill_guide() {\n    margin  = 6;\n    len     = (n_guide - 1) * P + 2 * margin;\n    width   = edge_offset + hole_d / 2 + margin;\n    fence_w = 4;\n    fence_h = sheet_t * 0.8;               // a bit shy of the sheet so the guide sits flat\n    difference() {\n        union() {\n            cube([len, width, guide_t]);\n            translate([0, -fence_w, 0]) cube([len, fence_w, guide_t + fence_h]);\n        }\n        for (k = [0 : n_guide - 1])\n            translate([margin + k * P, edge_offset, -1])\n                cylinder(d = guide_hole_d, h = guide_t + 2, $fn = 48);\n    }\n    echo(str(\"  drill guide: \", n_guide, \" holes, \", len, \" mm long\"));\n}\n\nif (part == \"sprocket\") sprocket();\nelse drill_guide();\n";
+
+} };
+defs["core/scad.js"] = { map: {"./scad-template.js":"core/scad-template.js","./params.js":"core/params.js"}, fn: function (module, exports, require) {
+"use strict";
+// Fill the current design into the OpenSCAD model. Only values change: every
+// comment, check and console message in the file stays as it is, so OpenSCAD
+// still explains problems in plain words. "Settings only" is the parameter
+// block, to paste over the top of a file already open in OpenSCAD.
+const TEMPLATE = require("./scad-template.js");
+const { SCAD_NAMES } = require("./params.js");
+
+// Plain decimal, up to 4 places, never an exponent.
+function scadNum(v) {
+  let s = (Math.round(v * 1e4) / 1e4).toFixed(4).replace(/\.?0+$/, "");
+  return s === "-0" ? "0" : s;
+}
+
+// name -> text value for every parameter the page controls.
+function scadValues(design, part) {
+  const out = { part: JSON.stringify(part === "drill_guide" ? "drill_guide" : "sprocket") };
+  for (const [key, name] of Object.entries(SCAD_NAMES)) {
+    const v = design[key];
+    out[name] = typeof v === "boolean" ? String(v) : scadNum(v);
+  }
+  return out;
+}
+
+// One assignment line: `name = value;   // comment`. The comment keeps its
+// column when it can. A value that already means the same number keeps its
+// original spelling (4.0 stays 4.0), so an unchanged design is byte-identical.
+const LINE = /^([A-Za-z_]\w*)(\s*=\s*)([^;]*?)(;)(\s*)(\/\/.*)?$/;
+function fillLine(line, values) {
+  const m = LINE.exec(line);
+  if (!m || !(m[1] in values)) return line;
+  const [, name, eq, old, semi, sp, comment] = m;
+  const val = values[name];
+  const same = old === val || (isFinite(parseFloat(old)) && /^[-\d.]+$/.test(old) && parseFloat(old) === parseFloat(val));
+  if (same) return line;
+  if (!comment) return name + eq + val + semi;
+  const col = (name + eq + old + semi + sp).length;
+  const head = name + eq + val + semi;
+  return head + " ".repeat(Math.max(1, col - head.length)) + comment;
+}
+
+// The parameter section: from "/* [What to make] */" up to "/* [Hidden] */".
+function sectionRange(lines) {
+  const a = lines.findIndex(l => l.startsWith("/* [What to make] */"));
+  const b = lines.findIndex(l => l.startsWith("/* [Hidden] */"));
+  return [a, b];
+}
+
+function scadFile(design, part, template = TEMPLATE) {
+  const values = scadValues(design, part);
+  const lines = template.split("\n");
+  const [a, b] = sectionRange(lines);
+  return lines.map((l, i) => (i >= a && i < b) ? fillLine(l, values) : l).join("\n");
+}
+
+function scadSettings(design, part, template = TEMPLATE) {
+  const lines = scadFile(design, part, template).split("\n");
+  const [a, b] = sectionRange(lines);
+  const body = lines.slice(a, b);
+  while (body.length && !body[body.length - 1].trim()) body.pop();
+  return ["// Sprocket Planner settings: paste these over the matching lines at the top of polycarb_sprocket.scad", ""]
+    .concat(body).join("\n") + "\n";
+}
+
+module.exports = { scadNum, scadValues, fillLine, scadFile, scadSettings, TEMPLATE };
 
 } };
 defs["core/sheetfiles.js"] = { map: {}, fn: function (module, exports, require) {
@@ -3398,6 +3492,57 @@ function fit(widthPx, build, opts = {}) {
 module.exports = { Sketch, fit, textWidth, esc, n, attrs, FONT, D2R };
 
 } };
+defs["draw/track.js"] = { map: {}, fn: function (module, exports, require) {
+"use strict";
+// The sheet's track, seen end-on (looking along the slide): the slot the
+// sheet runs in, the servo shaft below it, and the sprocket's pins poking up
+// through the hole row. Sizes for building the track: shaft center to the
+// sheet's underside, slot height and slot width.
+
+function build(sk, vm) {
+  const m = vm.model;
+  if (!m.ok) { sk.text(0, 0, "Fix the red boxes to see the track.", { v: "mid", cls: "msg" }); sk.grow(-30, -6); sk.grow(30, 6); return; }
+  const p = m.p, d = m.d, s = m.sheet;
+  const W = s.W, t = p.sheetT, yb = d.yb, ct = p.trackClearT, cw = p.trackClearW;
+  const slotW = W + cw, slotH = t + ct, wall = 4;
+  // x = 0 at the slot's left wall; the sheet sits centered in the slot
+  const sx = cw / 2, rowX = sx + s.rowY;            // hole row across the sheet
+  const y0 = yb - ct / 2, y1 = y0 + slotH;          // slot bottom and top
+  // track walls (C shape, both sides)
+  for (const [a, b] of [[-wall, 0], [slotW, slotW + wall]]) sk.rect(a, y0 - wall, b, y1 + wall, "d part track", { "data-key": "trackClearW slotW" });
+  sk.rect(0, y1, slotW, y1 + wall, "d part track lip", { "data-key": "trackClearT slotH", noGrow: true });
+  sk.rect(0, y0 - wall, Math.max(0, rowX - p.drumW / 2 - 1.5), y0, "d part track lip", { "data-key": "trackClearT slotH", noGrow: true });
+  sk.rect(Math.min(slotW, rowX + p.drumW / 2 + 1.5), y0 - wall, slotW, y0, "d part track lip", { "data-key": "trackClearT slotH", noGrow: true });
+  // the sheet in its slot
+  sk.rect(sx, yb, sx + W, yb + t, "d part sheet", { "data-key": "sheetT sheetW" });
+  // sprocket seen edge-on: the drum (sprocket thickness wide) up to the drum radius, pins above it
+  const z0 = rowX - p.drumW / 2, slab = p.pinFlat * p.pinW;
+  sk.rect(z0, 0, z0 + p.drumW, d.r0, "d part drum", { "data-key": "drumW drumD" });
+  // pins sit flush with the outer face (the face away from the hub)
+  sk.rect(z0, d.r0, z0 + slab, d.r0 + p.pinH, "d part pin", { "data-key": "pinW pinH pinFlat" });
+  sk.circle(rowX, 0, 1.2, "d part shaft", { "data-key": "yb" });
+  sk.line(rowX - 2.5, 0, rowX + 2.5, 0, "cline", { noGrow: true });
+  sk.line(rowX, -2.5, rowX, 2.5, "cline", { noGrow: true });
+  sk.text(rowX + 2, -sk.px(6), vm.word("servo shaft", "shaft axis"), { anchor: "start", v: "top", cls: "note", px: 13 });
+
+  // dimensions
+  sk.linear([rowX, 0], [rowX, yb], [-(rowX + wall + sk.px(18)), 0], {
+    key: "yb", level: "key", label: vm.word("shaft to sheet ", "axis to sheet ") + vm.num("yb"), badge: vm.badge("yb"), anchor: "end"
+  });
+  sk.linear([slotW + wall, y0], [slotW + wall, y1], [sk.px(14), 0], {
+    key: "trackClearT slotH", level: "key", label: vm.word("slot height ", "slot height ") + vm.num("slotH"), badge: vm.badge("slotH"), anchor: "start"
+  });
+  sk.linear([0, y1 + wall], [slotW, y1 + wall], [0, sk.px(12)], {
+    key: "trackClearW slotW", level: "key", label: vm.word("slot width ", "slot width ") + vm.num("slotW"), badge: vm.badge("slotW")
+  });
+  sk.linear([0, y0 - wall], [rowX, y0 - wall], [0, -sk.px(12)], {
+    key: "rowOffset rowFromWall", level: "all", label: vm.word("wall to hole row ", "wall to pin line ") + vm.num("rowFromWall"), badge: vm.badge("rowFromWall")
+  });
+}
+
+module.exports = { id: "track", build, fitOpts: () => ({ maxHeightPx: 340, maxScale: 12 }) };
+
+} };
 defs["ui/dialogs.js"] = { map: {"./dom.js":"ui/dom.js"}, fn: function (module, exports, require) {
 "use strict";
 // Windows 98 style dialogs: a small window with a title bar and
@@ -3787,6 +3932,169 @@ function whatsThis(root, { onPick, onChange }) {
 }
 
 module.exports = { openExplainer, whatsThis, explainFor, ANIMS };
+
+} };
+defs["ui/export.js"] = { map: {"./dom.js":"ui/dom.js","./dialogs.js":"ui/dialogs.js","../core/scad.js":"core/scad.js","../core/sheetfiles.js":"core/sheetfiles.js","./icons.js":"ui/icons.js"}, fn: function (module, exports, require) {
+"use strict";
+// "Make it": the Part choice, Copy OpenSCAD file / Copy settings only, the
+// sheet SVG and DXF files for CNC, the track box, and the help dialogs for
+// getting a part into OpenSCAD and a slicer.
+const { h, download } = require("./dom.js");
+const D = require("./dialogs.js");
+const { scadFile, scadSettings } = require("../core/scad.js");
+const { sheetSVG, sheetDXF, fileName } = require("../core/sheetfiles.js");
+const { svgIcon } = require("./icons.js");
+
+// Copy from a button click. Try the clipboard, then the old copy command,
+// then show the text with a Select all button so Ctrl+C works.
+async function copyText(text, title) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); return "clipboard"; }
+  } catch (e) { /* blocked: try the next way */ }
+  try {
+    const ta = h("textarea", { readonly: true, style: { position: "fixed", left: "-9999px", top: "0" } });
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand && document.execCommand("copy");
+    ta.remove();
+    if (ok) return "execCommand";
+  } catch (e) { /* blocked too */ }
+  D.copyFallback(title, text);
+  return "dialog";
+}
+
+const partName = part => part === "drill_guide" ? "drill guide" : "sprocket";
+
+function createExport(box, { store, getVM, setStatus }) {
+  const model = () => getVM().model;
+  // Problems OpenSCAD will stop on: the page says so before copying.
+  function stopNote() {
+    const m = model();
+    if (!m.ok) return " The design has numbers to fix first; OpenSCAD will stop on them.";
+    const n = m.counts.stop;
+    return n ? " Note: " + n + (n === 1 ? " problem needs" : " problems need") + " fixing. OpenSCAD will report " + (n === 1 ? "it." : "them.") : "";
+  }
+  const api = {
+    async copyScad() {
+      const part = store.settings.part;
+      const how = await copyText(scadFile(store.design, part), "Copy OpenSCAD file (" + partName(part) + ")");
+      if (how !== "dialog") setStatus("Copied the OpenSCAD file for the " + partName(part) + ". Paste it into OpenSCAD." + stopNote());
+      return how;
+    },
+    async copySettings() {
+      const part = store.settings.part;
+      const how = await copyText(scadSettings(store.design, part), "Copy settings only (" + partName(part) + ")");
+      if (how !== "dialog") setStatus("Copied the settings. Paste them over the top of the OpenSCAD file." + stopNote());
+      return how;
+    },
+    saveSVG() { return saveSheet("svg"); },
+    saveDXF() { return saveSheet("dxf"); },
+    stlHelp() {
+      D.openDialog({
+        title: "How to make the STL",
+        cls: "wide helpdlg",
+        body: h("div.help",
+          h("p", "OpenSCAD turns the copied file into a part you can print. It is free and needs no internet."),
+          h("ol",
+            h("li", "Pick Sprocket or Drill guide, then press ", h("b", "Copy OpenSCAD file"), "."),
+            h("li", "Open OpenSCAD. Choose ", h("b", "File > New"), "."),
+            h("li", "Click in the left side and press ", h("b", "Ctrl+V"), " to paste."),
+            h("li", "Press ", h("b", "F6"), " to render. Wait for it to finish."),
+            h("li", "Read the console at the bottom. It lists the hole spacing and the screws to buy."),
+            h("li", "Choose ", h("b", "File > Export > Export as STL"), " and save it."),
+            h("li", "Open the STL in your slicer (PrusaSlicer, Cura or Bambu Studio). It prints flat with no supports.")),
+          h("p.term", "Already have the file open? Use Copy settings only and paste over the lines at the top."),
+          h("p.term", "If OpenSCAD shows a red ERROR, it names the problem in plain words. The same warning shows here too.")),
+        buttons: [{ label: "OK", value: "ok", primary: true }]
+      });
+    },
+    howToUse() {
+      D.openDialog({
+        title: "How to use Sprocket Planner",
+        cls: "wide helpdlg",
+        body: h("div.help",
+          h("ol",
+            h("li", "Type how far the wheel ", h("b", "turns"), " and how far the sheet ", h("b", "slides"), "."),
+            h("li", "Watch the pictures change. Green ▲ and red ▼ badges show what went up or down."),
+            h("li", "Click any box. Its part lights up in every drawing. Press ", h("b", "?"), " to learn what it means."),
+            h("li", "Check the ", h("b", "fit meters"), ". Green is good. Red needs a fix, and the warning says how."),
+            h("li", "Press ", h("b", "Play"), " to watch the pins push the sheet."),
+            h("li", h("b", "Save design"), " to keep it. Check two Compare boxes to see designs side by side."),
+            h("li", "Lock a box with its padlock to keep that number while you change others."),
+            h("li", "When it looks good, use ", h("b", "Make it"), " to copy the OpenSCAD file and save the sheet files.")),
+          h("p.term", "Try the buttons under Try these to see what goes wrong, and why.")),
+        buttons: [{ label: "OK", value: "ok", primary: true }]
+      });
+    },
+    render(vm) { paint(vm); }
+  };
+
+  function saveSheet(kind) {
+    const m = model();
+    if (!m.ok) { D.messageBox("Save sheet " + kind.toUpperCase(), ["Fix the red boxes first. Then the sheet can be saved."], svgIcon("stopSign", 16)); return null; }
+    const name = fileName(m.p, m.d, kind);
+    if (kind === "svg") download(name, sheetSVG(m.p, m.d), "image/svg+xml");
+    else download(name, sheetDXF(m.p, m.d), "application/dxf");
+    setStatus("Saved " + name + ". Look in your Downloads folder.");
+    return name;
+  }
+
+  // ---------- the box ----------
+  const partRadios = ["sprocket", "drill_guide"].map(v => {
+    const id = "part-" + v;
+    const input = h("input", { type: "radio", name: "part", id, value: v });
+    input.addEventListener("change", () => { if (input.checked) store.setSettings({ part: v }); });
+    return { v, input, el: h("div.field-row", input, h("label", { for: id }, v === "sprocket" ? "Sprocket" : "Drill guide")) };
+  });
+  const btn = (label, cmd, iconName) => {
+    const b = h("button", { type: "button", "data-cmd": cmd }, iconName ? h("span.btn-ic", { html: svgIcon(iconName, 16) }) : null, label);
+    b.addEventListener("click", () => api[cmd]());
+    return b;
+  };
+  const scadNote = h("p.hint");
+  const sheetNote = h("p.hint");
+  const trackList = h("dl.trackbox", { id: "trackbox", "aria-label": "Track sizes" });
+
+  box.innerHTML = "";
+  box.append(
+    h("div.exp-col",
+      h("h3", "3D print (OpenSCAD)"),
+      h("fieldset.part-pick", h("legend", "Part"), partRadios.map(r => r.el)),
+      h("div.exp-btns", btn("Copy OpenSCAD file", "copyScad", "scad"), btn("Copy settings only", "copySettings", "settingsCopy")),
+      scadNote,
+      h("div.exp-btns", btn("How to make the STL…", "stlHelp"))),
+    h("div.exp-col",
+      h("h3", "Sheet for CNC cutting"),
+      h("div.exp-btns", btn("Save sheet SVG", "saveSVG", "svg"), btn("Save sheet DXF", "saveDXF", "dxf")),
+      sheetNote,
+      h("h3", "Track for the sheet"),
+      trackList,
+      h("figure.drawbox", h("div.drawing", { id: "d-track", tabindex: "-1" }), h("figcaption", "End view: the sheet in its track, with the sprocket below. Sizes in mm."))));
+
+  function paint(vm) {
+    for (const r of partRadios) r.input.checked = store.settings.part === r.v;
+    const m = vm.model;
+    scadNote.textContent = "Copies the whole " + partName(store.settings.part) + " file with your numbers filled in." +
+      (m.ok && m.counts.stop ? " Fix the red warnings first, or OpenSCAD will stop." : "");
+    sheetNote.textContent = m.ok ? "Files: " + fileName(m.p, m.d, "svg") + " and .dxf. True size in mm. Holes and outline are separate layers." : "Fix the red boxes to save the sheet.";
+    trackList.innerHTML = "";
+    if (!m.ok) return;
+    for (const [key, name, hint] of [
+      ["yb", "Shaft center to sheet underside", "Set the track this far above the servo shaft."],
+      ["slotH", "Slot height", "Sheet thickness plus room to slide."],
+      ["slotW", "Slot width", "Sheet width plus room to slide."],
+      ["rowFromWall", "Slot wall to hole row", "Line the sprocket up with this."]
+    ]) {
+      const b = vm.badge(key);
+      trackList.append(h("div.tb-row", { "data-hl": key },
+        h("dt", name), h("dd", h("b", vm.num(key) + " mm"), b ? h("span", { class: "bdg " + b.cls, "aria-label": b.aria }, " " + b.text) : null, h("span.hint", " " + hint))));
+    }
+  }
+  return api;
+}
+
+module.exports = { createExport, copyText };
 
 } };
 defs["ui/highlight.js"] = { map: {"./dom.js":"ui/dom.js","../state/fields.js":"state/fields.js"}, fn: function (module, exports, require) {
@@ -4558,7 +4866,7 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
 module.exports = { createInputs };
 
 } };
-defs["ui/main.js"] = { map: {"./dom.js":"ui/dom.js","../state/store.js":"state/store.js","../state/storage.js":"state/storage.js","../state/settings.js":"state/settings.js","../state/examples.js":"state/examples.js","../state/fields.js":"state/fields.js","./vm.js":"ui/vm.js","./drawings.js":"ui/drawings.js","./highlight.js":"ui/highlight.js","./inputs.js":"ui/inputs.js","./menubar.js":"ui/menubar.js","./toolbar.js":"ui/toolbar.js","./views.js":"ui/views.js","./tables.js":"ui/tables.js","./summary.js":"ui/summary.js","./dialogs.js":"ui/dialogs.js","./icons.js":"ui/icons.js","../core/format.js":"core/format.js","./saved.js":"ui/saved.js","./settingsdlg.js":"ui/settingsdlg.js","../draw/panels.js":"draw/panels.js","./meters.js":"ui/meters.js","./explain.js":"ui/explain.js","../draw/howitworks.js":"draw/howitworks.js","../draw/dial.js":"draw/dial.js","../draw/ruler.js":"draw/ruler.js","../draw/layout.js":"draw/layout.js","../draw/closeup.js":"draw/closeup.js","../draw/pinhole.js":"draw/pinhole.js","../draw/chart.js":"draw/chart.js","../draw/hubface.js":"draw/hubface.js","../draw/sheet.js":"draw/sheet.js"}, fn: function (module, exports, require) {
+defs["ui/main.js"] = { map: {"./dom.js":"ui/dom.js","../state/store.js":"state/store.js","../state/storage.js":"state/storage.js","../state/settings.js":"state/settings.js","../state/examples.js":"state/examples.js","../state/fields.js":"state/fields.js","./vm.js":"ui/vm.js","./drawings.js":"ui/drawings.js","./highlight.js":"ui/highlight.js","./inputs.js":"ui/inputs.js","./menubar.js":"ui/menubar.js","./toolbar.js":"ui/toolbar.js","./views.js":"ui/views.js","./tables.js":"ui/tables.js","./summary.js":"ui/summary.js","./dialogs.js":"ui/dialogs.js","./icons.js":"ui/icons.js","../core/format.js":"core/format.js","./saved.js":"ui/saved.js","./settingsdlg.js":"ui/settingsdlg.js","../draw/panels.js":"draw/panels.js","./meters.js":"ui/meters.js","./explain.js":"ui/explain.js","../draw/howitworks.js":"draw/howitworks.js","./export.js":"ui/export.js","../draw/dial.js":"draw/dial.js","../draw/ruler.js":"draw/ruler.js","../draw/layout.js":"draw/layout.js","../draw/closeup.js":"draw/closeup.js","../draw/pinhole.js":"draw/pinhole.js","../draw/chart.js":"draw/chart.js","../draw/hubface.js":"draw/hubface.js","../draw/sheet.js":"draw/sheet.js","../draw/track.js":"draw/track.js"}, fn: function (module, exports, require) {
 "use strict";
 // Wires everything together: state -> analyze() -> view model -> every
 // drawing, table and meter. Nothing here computes geometry.
@@ -4586,6 +4894,7 @@ const { renderPanels } = require("../draw/panels.js");
 const { renderMeters } = require("./meters.js");
 const { openExplainer, whatsThis } = require("./explain.js");
 const how = require("../draw/howitworks.js");
+const { createExport } = require("./export.js");
 
 const MODS = {
   dial: require("../draw/dial.js"),
@@ -4595,7 +4904,8 @@ const MODS = {
   pinhole: require("../draw/pinhole.js"),
   chart: require("../draw/chart.js"),
   hubface: require("../draw/hubface.js"),
-  sheet: require("../draw/sheet.js")
+  sheet: require("../draw/sheet.js"),
+  track: require("../draw/track.js")
 };
 const LABELS = {
   dial: vm => "Turn dial: the wheel turns " + vm.design.rotation + " degrees",
@@ -4604,7 +4914,8 @@ const LABELS = {
   closeup: "Close-up of the pins in the sheet holes",
   pinhole: "One pin standing in its hole, with its sizes",
   hubface: "Hub side of the sprocket with the goBILDA hub outline",
-  sheet: "Sheet pattern for cutting, and the drill guide"
+  sheet: "Sheet pattern for cutting, and the drill guide",
+  track: "End view of the sheet in its track, with the servo shaft below"
 };
 
 function start() {
@@ -4658,6 +4969,10 @@ function start() {
   });
   $("#tb-help").addEventListener("click", () => wt.toggle());
 
+  // ---------- export box (holds the track drawing, so it comes first) ----------
+  const exporter = createExport($("#export"), { store, getVM: () => app.vm, setStatus });
+  app.exporter = exporter;
+
   // ---------- drawings ----------
   for (const [id, mod] of Object.entries(MODS)) app.drawings[id] = createDrawing($("#d-" + id), mod, LABELS[id] || "");
   app.vmHooks = { onAnimated: el => highlighter.refresh(el) };
@@ -4684,6 +4999,7 @@ function start() {
     inputs.paint(vm);
     renderSummary({ summary: $("#summary"), facts: $("#facts"), chips: $("#chips"), warnings: $("#warnings") }, vm);
     renderMeters($("#meters"), vm);
+    exporter.render(vm);
     for (const d of Object.values(app.drawings)) d.render(vm);
     renderMeasure($("#measure"), vm, key => inputs.focusField(key));
     renderSaved($("#saved-list"), { store, actions: savedActions });
@@ -4949,6 +5265,12 @@ function start() {
     },
     clearCompare() { store.clearCompare(); setStatus("Compare checks cleared."); },
     explain(key) { stop(); openExplainer(key, { motionOk }); },
+    copyScad() { return exporter.copyScad(); },
+    copySettings() { return exporter.copySettings(); },
+    saveSVG() { return exporter.saveSVG(); },
+    saveDXF() { return exporter.saveDXF(); },
+    stlHelp() { stop(); exporter.stlHelp(); },
+    howToUse() { stop(); exporter.howToUse(); },
     whatsThis() { wt.toggle(); },
     gotoHow() {
       const sec = $("#sec-how");
@@ -4966,7 +5288,7 @@ function start() {
     }
   };
   app.commands = commands;
-  function run(cmd, arg) { if (commands[cmd]) commands[cmd](arg); else setStatus("Not available yet."); }
+  function run(cmd, arg) { if (commands[cmd]) return commands[cmd](arg); setStatus("Not available yet."); return undefined; }
   app.run = run;
 
   // ---------- menus and toolbar ----------

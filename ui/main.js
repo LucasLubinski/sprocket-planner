@@ -25,6 +25,7 @@ const { renderPanels } = require("../draw/panels.js");
 const { renderMeters } = require("./meters.js");
 const { openExplainer, whatsThis } = require("./explain.js");
 const how = require("../draw/howitworks.js");
+const { createExport } = require("./export.js");
 
 const MODS = {
   dial: require("../draw/dial.js"),
@@ -34,7 +35,8 @@ const MODS = {
   pinhole: require("../draw/pinhole.js"),
   chart: require("../draw/chart.js"),
   hubface: require("../draw/hubface.js"),
-  sheet: require("../draw/sheet.js")
+  sheet: require("../draw/sheet.js"),
+  track: require("../draw/track.js")
 };
 const LABELS = {
   dial: vm => "Turn dial: the wheel turns " + vm.design.rotation + " degrees",
@@ -43,7 +45,8 @@ const LABELS = {
   closeup: "Close-up of the pins in the sheet holes",
   pinhole: "One pin standing in its hole, with its sizes",
   hubface: "Hub side of the sprocket with the goBILDA hub outline",
-  sheet: "Sheet pattern for cutting, and the drill guide"
+  sheet: "Sheet pattern for cutting, and the drill guide",
+  track: "End view of the sheet in its track, with the servo shaft below"
 };
 
 function start() {
@@ -97,6 +100,10 @@ function start() {
   });
   $("#tb-help").addEventListener("click", () => wt.toggle());
 
+  // ---------- export box (holds the track drawing, so it comes first) ----------
+  const exporter = createExport($("#export"), { store, getVM: () => app.vm, setStatus });
+  app.exporter = exporter;
+
   // ---------- drawings ----------
   for (const [id, mod] of Object.entries(MODS)) app.drawings[id] = createDrawing($("#d-" + id), mod, LABELS[id] || "");
   app.vmHooks = { onAnimated: el => highlighter.refresh(el) };
@@ -123,6 +130,7 @@ function start() {
     inputs.paint(vm);
     renderSummary({ summary: $("#summary"), facts: $("#facts"), chips: $("#chips"), warnings: $("#warnings") }, vm);
     renderMeters($("#meters"), vm);
+    exporter.render(vm);
     for (const d of Object.values(app.drawings)) d.render(vm);
     renderMeasure($("#measure"), vm, key => inputs.focusField(key));
     renderSaved($("#saved-list"), { store, actions: savedActions });
@@ -388,6 +396,12 @@ function start() {
     },
     clearCompare() { store.clearCompare(); setStatus("Compare checks cleared."); },
     explain(key) { stop(); openExplainer(key, { motionOk }); },
+    copyScad() { return exporter.copyScad(); },
+    copySettings() { return exporter.copySettings(); },
+    saveSVG() { return exporter.saveSVG(); },
+    saveDXF() { return exporter.saveDXF(); },
+    stlHelp() { stop(); exporter.stlHelp(); },
+    howToUse() { stop(); exporter.howToUse(); },
     whatsThis() { wt.toggle(); },
     gotoHow() {
       const sec = $("#sec-how");
@@ -405,7 +419,7 @@ function start() {
     }
   };
   app.commands = commands;
-  function run(cmd, arg) { if (commands[cmd]) commands[cmd](arg); else setStatus("Not available yet."); }
+  function run(cmd, arg) { if (commands[cmd]) return commands[cmd](arg); setStatus("Not available yet."); return undefined; }
   app.run = run;
 
   // ---------- menus and toolbar ----------

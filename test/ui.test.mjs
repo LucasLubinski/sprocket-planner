@@ -117,8 +117,7 @@ test("planner UI in headless Chrome", { skip: !chrome && "Chrome not found", tim
         }
         return miss;
       })()`);
-      const LATER = ["trackClearT", "trackClearW"]; // the track drawing arrives with the export box
-      assert.deepEqual(missing.filter(k => !LATER.includes(k)), [], "inputs with nothing to light up");
+      assert.deepEqual(missing, [], "inputs with nothing to light up");
     });
 
     await t.test("measurements table lists the derived numbers", async () => {
@@ -211,6 +210,85 @@ test("planner UI in headless Chrome", { skip: !chrome && "Chrome not found", tim
       assert.equal(await ev(`__t.val("travel")`), "152.4", "units remembered");
       assert.equal(await ev(`__t.sp().store.saved.length`), 2, "saved designs remembered");
       assert.equal(await ev(`__t.val("rotation")`), "180", "current design remembered");
+    });
+
+    // ---------------- making it (phase 5) ----------------
+    await t.test("Copy OpenSCAD file copies the whole model with the current numbers", async () => {
+      await fresh();
+      await typeInto("rotation", "180"); await blur();
+      const r = await ev(`(async () => {
+        let got = null;
+        navigator.clipboard.writeText = async t => { got = t; };
+        const how = await __t.sp().run("copyScad");
+        const file = got;
+        document.querySelector("#part-drill_guide").click(); await __t.settle();
+        await __t.sp().run("copySettings");
+        return { how, file, settings: got, status: document.querySelector(".st-msg").textContent };
+      })()`);
+      assert.equal(r.how, "clipboard");
+      assert.match(r.file, /^rotation_deg = 180;/m);
+      assert.match(r.file, /^part = "sprocket";/m);
+      assert.match(r.file, /module sprocket\(\)/, "the whole model");
+      assert.match(r.settings, /^part = "drill_guide";/m);
+      assert.doesNotMatch(r.settings, /module /, "settings only");
+      assert.match(r.status, /Paste them over/);
+    });
+
+    await t.test("when the clipboard is blocked, a Select all dialog shows the text", async () => {
+      const r = await ev(`(async () => {
+        navigator.clipboard.writeText = async () => { throw new Error("blocked"); };
+        document.execCommand = () => false;
+        const how = await __t.sp().run("copyScad");
+        await __t.settle();
+        const ta = document.querySelector(".copyfb textarea");
+        const sel = [...document.querySelectorAll(".copyfb button")].find(b => b.textContent === "Select all");
+        const out = { how, text: ta && ta.value.slice(0, 300), sel: !!sel };
+        [...document.querySelectorAll(".dialog button")].find(b => b.textContent === "Close").click();
+        return out;
+      })()`);
+      assert.equal(r.how, "dialog");
+      assert.ok(r.sel, "Select all button");
+      assert.match(r.text, /Pin sprocket/);
+    });
+
+    await t.test("Save sheet SVG and DXF download true-scale files named with the key numbers", async () => {
+      await fresh();
+      const r = await ev(`(async () => {
+        const got = [];
+        const blobs = []; const mk = URL.createObjectURL; URL.createObjectURL = b => { blobs.push(b); return mk.call(URL, b); };
+        HTMLAnchorElement.prototype.click = function () { got.push({ name: this.download, blob: blobs[blobs.length - 1] }); };
+        __t.sp().run("saveSVG"); __t.sp().run("saveDXF");
+        const svg = await got[0].blob.text();
+        const dxf = await got[1].blob.text();
+        return { names: got.map(g => g.name), svgHead: svg.split(String.fromCharCode(10)).slice(1, 3).join(" "), circles: (svg.match(/<circle/g) || []).length,
+          layers: [/id="holes"/.test(svg), /id="outline"/.test(svg)], dxfCircles: dxf.split(String.fromCharCode(13, 10) + "CIRCLE" + String.fromCharCode(13, 10)).length - 1, dxfLayers: /HOLES/.test(dxf) && /OUTLINE/.test(dxf) };
+      })()`);
+      assert.deepEqual(r.names, ["sheet_16pins_9.525mm_20holes.svg", "sheet_16pins_9.525mm_20holes.dxf"]);
+      assert.match(r.svgHead, /width="[\d.]+mm" height="40mm" viewBox="0 0 [\d.]+ 40"/);
+      assert.equal(r.circles, 20);
+      assert.deepEqual(r.layers, [true, true]);
+      assert.equal(r.dxfCircles, 20);
+      assert.ok(r.dxfLayers);
+    });
+
+    await t.test("track box gives shaft-to-sheet, slot height and slot width", async () => {
+      const r = await ev(`[...document.querySelectorAll("#trackbox .tb-row")].map(e => e.querySelector("dt").textContent + "=" + e.querySelector("dd b").textContent)`);
+      assert.deepEqual(r.slice(0, 3), ["Shaft center to sheet underside=23.51 mm", "Slot height=1.80 mm", "Slot width=41.00 mm"]);
+      assert.ok(await ev(`!!document.querySelector("svg.track")`), "track drawing");
+    });
+
+    await t.test("Help dialogs: STL steps and How to use", async () => {
+      const r = await ev(`(async () => {
+        const out = [];
+        for (const cmd of ["stlHelp", "howToUse"]) {
+          __t.sp().run(cmd); await __t.settle();
+          const d = document.querySelector(".helpdlg");
+          out.push(d ? d.querySelector(".title-bar-text").textContent + "|" + d.querySelectorAll("li").length : "none");
+          d.querySelector(".dlg-buttons button").click(); await __t.settle();
+        }
+        return out;
+      })()`);
+      assert.deepEqual(r, ["How to make the STL|7", "How to use Sprocket Planner|8"]);
     });
 
     // ---------------- student visuals (phase 4) ----------------
