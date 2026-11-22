@@ -1,5 +1,6 @@
 "use strict";
-// Toolbar: small beveled icon buttons with yellow tooltips.
+// Toolbar: beveled icon buttons with a short caption under each icon
+// (Windows 98 "Show text labels"), plus yellow tooltips with the full name.
 const { h } = require("./dom.js");
 const { svgIcon } = require("./icons.js");
 
@@ -39,6 +40,7 @@ function createToolbar(bar, { buttons, run, tooltip }) {
     if (b === "|") { bar.appendChild(h("span.tb-sep", { role: "separator", "aria-orientation": "vertical" })); continue; }
     const btn = h("button.tb-btn", { type: "button", "aria-label": b.label, "data-cmd": b.cmd });
     btn.innerHTML = svgIcon(b.icon, 32);
+    btn.appendChild(h("span.tb-cap", { "aria-hidden": "true" }, b.caption || b.label));
     if (b.toggle) btn.setAttribute("aria-pressed", "false");
     btn.addEventListener("click", () => run(b.cmd));
     tooltip.attach(btn, () => btn.getAttribute("aria-label"));
@@ -46,11 +48,12 @@ function createToolbar(bar, { buttons, run, tooltip }) {
     els[b.cmd] = btn;
   }
   return {
-    set(cmd, { pressed, label, icon, disabled } = {}) {
+    set(cmd, { pressed, label, caption, icon, disabled } = {}) {
       const el = els[cmd]; if (!el) return;
       if (pressed !== undefined) el.setAttribute("aria-pressed", String(!!pressed));
       if (label) el.setAttribute("aria-label", label);
-      if (icon && el.dataset.icon !== icon) { el.dataset.icon = icon; el.innerHTML = svgIcon(icon, 32); }
+      if (caption) el.querySelector(".tb-cap").textContent = caption;
+      if (icon && el.dataset.icon !== icon) { el.dataset.icon = icon; el.querySelector(".px-icon").outerHTML = svgIcon(icon, 32); }
       if (disabled !== undefined) el.disabled = !!disabled;
     }
   };

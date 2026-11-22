@@ -525,30 +525,30 @@ function start() {
   app.toolbar = createToolbar($("#toolbar"), {
     tooltip, run,
     buttons: [
-      { cmd: "saveDesign", icon: "save", label: "Save design" },
-      { cmd: "gotoCompare", icon: "compare", label: "Compare saved designs" },
+      { cmd: "saveDesign", icon: "save", label: "Save design", caption: "Save" },
+      { cmd: "gotoCompare", icon: "compare", label: "Compare saved designs", caption: "Compare" },
       "|",
       { cmd: "play", icon: "play", label: "Play", toggle: true },
       "|",
-      { cmd: "copyScad", icon: "scad", label: "Copy OpenSCAD file" },
-      { cmd: "copySettings", icon: "settingsCopy", label: "Copy settings only" },
-      { cmd: "saveSVG", icon: "svg", label: "Save sheet SVG" },
-      { cmd: "saveDXF", icon: "dxf", label: "Save sheet DXF" },
+      { cmd: "copyScad", icon: "scad", label: "Copy file for OpenSCAD", caption: "Copy file" },
+      { cmd: "copySettings", icon: "settingsCopy", label: "Copy settings only", caption: "Copy settings" },
+      { cmd: "saveSVG", icon: "svg", label: "Save sheet SVG", caption: "Sheet SVG" },
+      { cmd: "saveDXF", icon: "dxf", label: "Save sheet DXF", caption: "Sheet DXF" },
       "|",
       { cmd: "undo", icon: "undo", label: "Undo" },
       { cmd: "redo", icon: "redo", label: "Redo" },
       "|",
-      { cmd: "toggleGhost", icon: "ghost", label: "Ghost overlay", toggle: true },
+      { cmd: "toggleGhost", icon: "ghost", label: "Ghost overlay", caption: "Ghost", toggle: true },
       { cmd: "settings", icon: "gear", label: "Settings" }
     ]
   });
   function paintChrome() {
     const tb = app.toolbar;
-    tb.set("play", { pressed: app.playing, icon: app.playing ? "stop" : "play", label: app.playing ? "Pause" : "Play" });
+    tb.set("play", { pressed: app.playing, icon: app.playing ? "stop" : "play", label: app.playing ? "Pause" : "Play", caption: app.playing ? "Pause" : "Play" });
     tb.set("toggleGhost", { pressed: store.settings.ghost });
     tb.set("undo", { disabled: !store.canUndo });
     tb.set("redo", { disabled: !store.canRedo });
-    tb.set("copyScad", { label: "Copy OpenSCAD file (" + (store.settings.part === "sprocket" ? "sprocket" : "drill guide") + ")" });
+    tb.set("copyScad", { label: "Copy file for OpenSCAD (" + (store.settings.part === "sprocket" ? "sprocket" : "drill guide") + ")" });
   }
 
   // keyboard shortcuts
