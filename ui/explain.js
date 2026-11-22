@@ -52,10 +52,29 @@ const ANIMS = {
     return wheel(cx, cy, r, 16, f, 6, 4) + pie + start + arc +
       '<circle cx="' + cx + '" cy="' + cy + '" r="17" fill="var(--paper)" stroke="' + C.edge + '"/>' + label(cx, cy + 5, Math.round(f) + "°");
   },
+  // a small wheel turns under a long sheet and pushes it along; a fixed
+  // start mark and an end mark riding on one marked hole hold a dimension
+  // line that counts up to 6 in
   slide: t => {
-    const s = 60 * ping(t, 3);
-    return holesBar(20 + s, 40, 120, 20, 4) + '<path d="M20 80 H' + r1(20 + s) + '" stroke="' + C.hl + '" stroke-width="3"/>' +
-      '<path d="M' + r1(14 + s) + " 74 L" + r1(22 + s) + " 80 L" + r1(14 + s) + ' 86" fill="none" stroke="' + C.hl + '" stroke-width="3"/>' + label(110, 104, "slide");
+    const n = 8, cx = 50, cy = 70, r = 18, Rp = r + 3, P = 2 * Math.PI * Rp / n, x0 = cx, full = 100, back = 170;
+    const ph = t % 4.5;
+    const k = ph < 3 ? 0.5 - 0.5 * Math.cos(Math.PI * ph / 3) : ph < 4 ? 1 : 0.5 + 0.5 * Math.cos(Math.PI * (ph - 4) / 0.5);
+    const s = full * k, x1 = x0 + s, dimY = 26;
+    const rot = s / Rp * 180 / Math.PI;
+    // a strip longer than the picture, with a hole at the marked spot x1
+    let o = holesBar(r1(x1 - back), 40, 400, P, 3, back) + wheel(cx, cy, r, n, rot, 6, 4);
+    o += '<circle cx="' + r1(x1) + '" cy="46" r="3.5" fill="' + C.hl + '"/>';
+    // start (fixed) and end (moving with the marked hole) marks
+    o += '<path d="M' + x0 + " " + (dimY - 6) + " V40" + '" stroke="' + C.ink + '" stroke-dasharray="3 2"/>';
+    o += '<path d="M' + r1(x1) + " " + (dimY - 6) + " V42" + '" stroke="' + C.hl + '" stroke-width="1.5"/>';
+    if (s > 8) {
+      o += '<path d="M' + x0 + " " + dimY + " H" + r1(x1) + '" stroke="' + C.hl + '" stroke-width="2"/>' +
+        '<path d="M' + (x0 + 6) + " " + (dimY - 4) + " L" + x0 + " " + dimY + " L" + (x0 + 6) + " " + (dimY + 4) + " Z" + '" fill="' + C.hl + '"/>' +
+        '<path d="M' + r1(x1 - 6) + " " + (dimY - 4) + " L" + r1(x1) + " " + dimY + " L" + r1(x1 - 6) + " " + (dimY + 4) + " Z" + '" fill="' + C.hl + '"/>';
+    }
+    const inches = 6 * k;
+    o += label(r1(Math.max(x0 + 28, x0 + s / 2)), 15, (inches > 5.95 ? "6" : inches.toFixed(1)) + " in");
+    return o + label(150, 82, "turn → slide");
   },
   pins: t => {
     const counts = [8, 12, 16, 24], n = counts[Math.floor(t / 1.6) % 4];
