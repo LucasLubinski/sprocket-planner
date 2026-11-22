@@ -102,6 +102,26 @@ test("planner UI in headless Chrome", { skip: !chrome && "Chrome not found", tim
       void pos;
     });
 
+    await t.test("hovering a drawing doesn't scroll the input list; clicking it does", async () => {
+      await ev(`(() => { const el = document.querySelector("#pane-views"); el.scrollTop = document.querySelector("#sec-layout").offsetTop; document.querySelector("#pane-inputs").scrollTop = 0; document.scrollingElement.scrollTop = 0; return 1; })()`);
+      await settle();
+      const where = () => ev(`[document.querySelector("#pane-inputs").scrollTop, document.scrollingElement.scrollTop, (() => { const r = document.querySelector('.field[data-field="pitchD"]').getBoundingClientRect(), p = document.querySelector("#pane-inputs").getBoundingClientRect(); return r.top >= p.top && r.bottom <= Math.min(p.bottom, innerHeight); })()]`);
+      const before = await where();
+      assert.equal(before[2], false, "Push circle box starts out of view");
+      const p2 = await ev(`(() => { const c = document.querySelector("svg.layout .pitch"); const r = c.getBoundingClientRect(); const R = r.width / 2 - 1; const a = (-90 + 11.25 + 7 * 22.5) * Math.PI / 180; return [r.left + r.width / 2 + R * Math.cos(a), r.top + r.height / 2 + R * Math.sin(a)]; })()`);
+      await page.mouse("mouseMoved", p2[0], p2[1], { buttons: 0 });
+      await settle(); await new Promise(r => setTimeout(r, 600));
+      const hovered = await where();
+      assert.deepEqual(hovered.slice(0, 2), before.slice(0, 2), "hover leaves the input list where it was");
+      assert.ok(await ev(`document.querySelector('.field[data-field="pitchD"]').classList.contains("pointed")`), "hover still lights the box");
+      await page.mouse("mousePressed", p2[0], p2[1], { button: "left", clickCount: 1 });
+      await page.mouse("mouseReleased", p2[0], p2[1], { button: "left", clickCount: 1 });
+      await new Promise(r => setTimeout(r, 900));
+      const clicked = await where();
+      assert.ok(clicked[2], "click scrolls the Push circle box into view");
+      await page.mouse("mouseMoved", 5, 5, { buttons: 0 });
+    });
+
     await t.test("every input lights up at least one part of a drawing (expert detail)", async () => {
       await ev(`__t.sp().store.setSettings({ detail: "expert", hub: "custom" }); __t.sp().store.setField("hub", "custom"); __t.sp().store.setField("shape", "straight"); 1`); await settle();
       const missing = await ev(`(async () => {

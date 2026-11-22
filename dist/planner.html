@@ -4764,12 +4764,13 @@ function createHighlighter({ root, inputsPane, getSettings, isVisibleField }) {
     }
   }
 
-  // hover over drawings
+  // hover over drawings: light up the part and its box, but don't scroll the
+  // input list (it jumped around as the mouse moved). A click scrolls.
   root.addEventListener("pointerover", e => {
     if (e.pointerType === "touch" || !getSettings().hover) return;
     const el = e.target.closest && e.target.closest("svg.drw [data-key]");
     if (!el) return;
-    pointFromDrawing(el, true);
+    pointFromDrawing(el, false);
   });
   root.addEventListener("pointerout", e => {
     if (!hoverKey) return;
