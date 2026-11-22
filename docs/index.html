@@ -4147,13 +4147,27 @@ function label(x, y, text, anchor = "middle") {
 }
 
 const ANIMS = {
+  // a sprocket turning clockwise: the pie on the drum and the arrow outside it
+  // grow with the turn, and the dark index pin rides along the pie's edge
   turn: t => {
-    const a = (t * 90) % 420, f = Math.min(a, 360);
-    const end = f * Math.PI / 180, large = f > 180 ? 1 : 0;
-    const x = 110 + 40 * Math.sin(end), y = 58 - 40 * Math.cos(end);
-    const pie = f >= 359.9 ? '<circle cx="110" cy="58" r="40" fill="' + C.hl + '" opacity=".35"/>' :
-      '<path d="M110 58 L110 18 A40 40 0 ' + large + ' 1 ' + r1(x) + " " + r1(y) + ' Z" fill="' + C.hl + '" opacity=".35"/>';
-    return '<circle cx="110" cy="58" r="40" fill="none" stroke="' + C.ink + '"/>' + pie + label(110, 64, Math.round(f) + "°");
+    const f = Math.min((t * 90) % 420, 360);
+    const cx = 110, cy = 56, r = 30, ra = 44, end = f * Math.PI / 180, large = f > 180 ? 1 : 0;
+    const at = rr => r1(cx + rr * Math.sin(end)) + " " + r1(cy - rr * Math.cos(end));
+    const pie = f >= 359.9 ? '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="' + C.hl + '" opacity=".35"/>' :
+      f > 0.5 ? '<path d="M' + cx + " " + cy + " L" + cx + " " + (cy - r) + " A" + r + " " + r + " 0 " + large + " 1 " + at(r) + ' Z" fill="' + C.hl + '" opacity=".35"/>' : "";
+    // arrow along the outside: a full ring once the turn reaches 360°
+    let arc = "";
+    if (f >= 359.9) arc = '<circle cx="' + cx + '" cy="' + cy + '" r="' + ra + '" fill="none" stroke="' + C.hl + '" stroke-width="2.5"/>';
+    else if (f > 0.5) arc = '<path d="M' + cx + " " + (cy - ra) + " A" + ra + " " + ra + " 0 " + large + " 1 " + at(ra) + '" fill="none" stroke="' + C.hl + '" stroke-width="2.5"/>';
+    if (f > 0.5) {
+      const ex = cx + ra * Math.sin(end), ey = cy - ra * Math.cos(end);
+      const tx = Math.cos(end), ty = Math.sin(end), nx = Math.sin(end), ny = -Math.cos(end);
+      arc += '<path d="M' + r1(ex + 6 * tx) + " " + r1(ey + 6 * ty) + " L" + r1(ex - 3 * tx + 5 * nx) + " " + r1(ey - 3 * ty + 5 * ny) +
+        " L" + r1(ex - 3 * tx - 5 * nx) + " " + r1(ey - 3 * ty - 5 * ny) + ' Z" fill="' + C.hl + '"/>';
+    }
+    const start = '<path d="M' + cx + " " + (cy - r + 4) + " V" + (cy - ra - 6) + '" stroke="' + C.ink + '" stroke-dasharray="2 2"/>';
+    return wheel(cx, cy, r, 16, f, 6, 4) + pie + start + arc +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="17" fill="var(--paper)" stroke="' + C.edge + '"/>' + label(cx, cy + 5, Math.round(f) + "°");
   },
   slide: t => {
     const s = 60 * ping(t, 3);
