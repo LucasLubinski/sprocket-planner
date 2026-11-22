@@ -269,12 +269,13 @@ body[data-ghost="strong"] svg.drw .ghost .gl { stroke-width: 2.2px; }
 /* ---- highlight: selecting a box points to it in the pictures ---- */
 svg.drw.focus-mode .d { opacity: 0.3; transition: opacity 0.12s; }
 svg.drw.focus-mode .d.hl { opacity: 1; }
-svg.drw .hl { filter: drop-shadow(0 0 1.5px var(--hl)) drop-shadow(0 0 3px var(--hl)); }
+/* only a faint glow: the color of the line, arrows and label carries the highlight */
+svg.drw .hl { filter: drop-shadow(0 0 1px var(--hl-soft)); }
 svg.drw .hl.part, svg.drw .hl .dl, svg.drw .hl .ext, svg.drw .hl line, svg.drw .hl polyline, svg.drw .hl.trace { stroke: var(--hl) !important; }
 svg.drw .hl .arw, svg.drw .hl .dot, svg.drw .hl .gap-dot { fill: var(--hl) !important; }
 svg.drw .hl .lbl, svg.drw .lbl.hl { fill: var(--hl) !important; font-weight: bold; }
 svg.drw .hl.hole, svg.drw .hl.hole-o { fill: var(--hl-soft) !important; stroke: var(--hl) !important; stroke-width: 1.5px; }
-svg.drw .hl.sheet, svg.drw .hl.drum, svg.drw .hl.pin { stroke-width: 2px; }
+svg.drw .hl.sheet, svg.drw .hl.drum, svg.drw .hl.pin { stroke-width: 1.5px; }
 body[data-labels="key"] svg.drw .lvl-all:not(.hl) { display: none; }
 body[data-labels="none"] svg.drw .dim:not(.hl) { display: none; }
 .callout { position: absolute; z-index: 5; background: var(--tip-bg); color: var(--text); border: 1px solid var(--text); padding: 4px 8px;
