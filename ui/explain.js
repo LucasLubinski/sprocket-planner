@@ -97,6 +97,17 @@ const ANIMS = {
       '<rect x="10" y="' + r1(80 - g - 14) + '" width="200" height="14" fill="' + C.plastic + '" stroke="' + C.plasticEdge + '"/>' +
       '<path d="M190 ' + r1(80 - g) + ' V80" stroke="' + C.hl + '" stroke-width="3"/>' + label(110, 24, "sheet thickness and gap");
   },
+  // one sheet seen edge-on that grows from 1.5 mm to 3 mm and back, with a
+  // measurement line beside it that grows with it (10 px per mm)
+  thickness: t => {
+    const mm = 1.5 + 1.5 * ping(t, 4), th = mm * 10, bot = 72, top = bot - th, xd = 156;
+    const arw = (y, dir) => '<path d="M' + (xd - 4) + " " + r1(y - 6 * dir) + " L" + xd + " " + r1(y) + " L" + (xd + 4) + " " + r1(y - 6 * dir) + ' Z" fill="' + C.hl + '"/>';
+    return '<rect x="14" y="' + r1(top) + '" width="126" height="' + r1(th) + '" fill="' + C.plastic + '" stroke="' + C.plasticEdge + '"/>' +
+      '<path d="M142 ' + r1(top) + " H" + (xd + 6) + " M142 " + bot + " H" + (xd + 6) + '" stroke="' + C.ink + '" stroke-width="0.8"/>' +
+      '<path d="M' + xd + " " + r1(top - 14) + " V" + (bot + 14) + '" stroke="' + C.hl + '" stroke-width="2"/>' +
+      arw(top, 1) + arw(bot, -1) +
+      label(166, r1((top + bot) / 2 + 5), mm.toFixed(1) + " mm", "start") + label(110, 104, "sheet seen from the edge");
+  },
   roll: t => {
     const x = 40 + (t * 40) % 140, rot = (x - 40) / 30 * 180 / Math.PI;
     return '<path d="M10 90 H210" stroke="' + C.plasticEdge + '" stroke-width="3"/><path d="M40 98 H' + r1(x) + '" stroke="' + C.hl + '" stroke-width="3"/>' +

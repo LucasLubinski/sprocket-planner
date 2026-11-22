@@ -46,7 +46,7 @@ const FIELDS = [
   { key: "sheetT", group: "sheet", name: "Sheet thickness", term: "sheet_t", unit: "mm", step: 0.1, big: 0.5, maxDp: 3,
     hint: "How thick the plastic sheet is.",
     callout: "Sheet thickness: how thick the polycarbonate sheet is.",
-    explain: { anim: "gap", text: ["Measure the sheet with calipers.", "A thicker sheet sits a little higher on the wheel."] } },
+    explain: { anim: "thickness", text: ["Measure the sheet with calipers.", "A thicker sheet sits a little higher on the wheel."] } },
   { key: "gap", group: "sheet", level: "expert", name: "Gap under the sheet", term: "sheet gap", unit: "mm", step: 0.05, big: 0.2, maxDp: 3,
     hint: "Space between the wheel and the sheet's underside.",
     callout: "Gap under the sheet: the space between the wheel and the sheet.",
