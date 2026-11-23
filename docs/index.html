@@ -564,6 +564,31 @@ svg.drw text.dl-edit { cursor: text; text-decoration: underline dotted; }
 .tip-edit { position: absolute; z-index: 5; height: 30px; font-size: 14px; padding: 2px 6px; }
 .drag-route { margin: 6px 0 0; }
 
+/* ---- design tabs (Current + one per open saved design) ---- */
+.dtabs-wrap { padding: 6px 6px 0; border-bottom: 1px solid var(--hilight); box-shadow: 0 1px 0 var(--light); }
+menu.dtabs { display: flex; flex-wrap: nowrap; list-style: none; margin: 0 0 -1px; padding: 2px 3px 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+menu.dtabs > li { display: flex; align-items: stretch; flex: 0 0 auto; position: relative; background: var(--face); border-top-left-radius: 3px; border-top-right-radius: 3px;
+  box-shadow: inset -1px 0 var(--dkshadow), inset 1px 1px var(--light), inset -2px 0 var(--shadow), inset 2px 2px var(--hilight); margin-top: 3px; }
+menu.dtabs > li.on { margin-top: 0; padding-bottom: 4px; z-index: 2; margin-left: -2px; margin-right: -2px; }
+menu.dtabs > li:first-child.on { margin-left: 0; }
+.dtab { background: none; box-shadow: none; min-width: 0; min-height: 30px; padding: 0 12px; font-size: 14px; white-space: nowrap; max-width: 16em; overflow: hidden; text-overflow: ellipsis; }
+.dtab:not(:disabled):active { box-shadow: none; }
+li.on > .dtab { font-weight: bold; }
+.dtab:focus-visible { outline: 1px dotted var(--text); outline-offset: -5px; }
+.dtab-x { background: none; box-shadow: none; min-width: 26px; min-height: 26px; padding: 0 6px 0 0; font-size: 16px; line-height: 1; align-self: center; color: var(--text); }
+.dtab-x:hover { color: #a00000; }
+.dtab-x:not(:disabled):active { box-shadow: none; }
+.dtab-x:focus-visible { outline: 1px dotted var(--text); outline-offset: -3px; }
+.tab-note { margin: 0 6px; padding: 4px 8px; font-size: 13px; background: #ffffe1; border: 1px solid var(--dkshadow); color: #000; }
+.tab-note[hidden] { display: none; }
+table.cmp th.this-tab, table.cmp td.this-tab { font-style: italic; }
+@media (any-pointer: coarse) {
+  .dtab { min-height: 44px; }
+  .dtab-x { min-width: 44px; min-height: 44px; padding: 0; }
+}
+@media (max-width: 900px) { .dtabs-wrap { padding: 4px 2px 0; } }
+table.saved td.sbtns span.this-tab { align-self: center; padding: 0 8px; font-style: italic; }
+
 </style>
 </head>
 <body class="detail-student">
@@ -580,6 +605,8 @@ svg.drw text.dl-edit { cursor: text; text-decoration: underline dotted; }
     </div>
     <div class="menubar" id="menubar" aria-label="Main menu"></div>
     <div class="toolbar" id="toolbar" role="toolbar" aria-label="Tools"></div>
+    <div class="dtabs-wrap"><menu class="dtabs" id="tabstrip"></menu></div>
+    <p class="tab-note" id="tab-note" hidden></p>
     <div class="client" id="client">
       <aside class="pane pane-inputs" id="pane-inputs" aria-label="Design settings"></aside>
       <main class="pane pane-views" id="pane-views"></main>
@@ -590,7 +617,7 @@ svg.drw text.dl-edit { cursor: text; text-decoration: underline dotted; }
 <div id="layer"></div>
 <noscript><p class="noscript">Sprocket Planner needs JavaScript. Open this file in Chrome.</p></noscript>
 <script>
-/* Sprocket Planner, built 2026-11-22. Source: core/, state/, draw/, ui/. */
+/* Sprocket Planner, built 2026-11-23. Source: core/, state/, draw/, ui/. */
 (function () {
 "use strict";
 var defs = {};
@@ -2226,6 +2253,8 @@ const { defaultDesign, normalizeDesign } = require("../core/params.js");
 const { normalizeSettings } = require("./settings.js");
 
 const MAX_COMPARE = 4;
+// The working design's tab. Every other tab is a saved design's id.
+const CURRENT = "current";
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 function letterName(i) {
@@ -2247,7 +2276,7 @@ function normalizeSaved(e, i) {
 
 function createStore({ storage = null, clock = () => Date.now() } = {}) {
   const loaded = storage ? storage.load() : null;
-  let design = loaded && loaded.design ? normalizeDesign(loaded.design) : defaultDesign();
+  let currentDesign = loaded && loaded.design ? normalizeDesign(loaded.design) : defaultDesign();
   let settings = normalizeSettings(loaded && loaded.settings);
   let saved = (loaded && Array.isArray(loaded.saved) ? loaded.saved : []).map(normalizeSaved).filter(Boolean);
   let nextLetter = loaded && Number.isInteger(loaded.nextLetter) ? loaded.nextLetter : saved.length;
@@ -2258,13 +2287,41 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
   // The routing of the current edit: what moved, the options, the student's pick.
   let lastRoute = null, choice = null;
   let seq = 0;
-  const session = createSession(design);
-  const undoStack = [], redoStack = [];
+  // Tabs: "Current" plus one per open saved design. Data saved before tabs
+  // existed has no tab list, so every saved design opens as a tab.
+  let tabs = [...new Set((loaded && Array.isArray(loaded.tabs) ? loaded.tabs : saved.map(s => s.id))
+    .filter(id => saved.some(s => s.id === id)))];
+  let active = loaded && tabs.includes(loaded.activeTab) ? loaded.activeTab : CURRENT;
+  const designOf = id => id === CURRENT ? currentDesign : (saved.find(s => s.id === id) || {}).design;
+  // The active tab's design, edit session (badge baseline) and undo history.
+  // Other tabs keep theirs in ctxs while they wait.
+  let design = designOf(active);
+  let session = createSession(design);
+  let undoStack = [], redoStack = [];
+  const ctxs = new Map();
   const listeners = new Set();
   if (settings.badgeBase !== "last" && !saved.some(s => s.id === settings.badgeBase)) settings = { ...settings, badgeBase: "last" };
 
   const emit = kind => { for (const fn of listeners) fn(kind); };
-  const persist = () => { if (storage) storage.save({ design, settings, saved, nextLetter, locks }); };
+  const persist = () => { if (storage) storage.save({ design: currentDesign, settings, saved, nextLetter, locks, tabs, activeTab: active }); };
+
+  // The active tab's design changes. A saved design's tab is that saved
+  // design, live, so its edits go straight back into the saved entry.
+  function commit(nd) {
+    design = nd;
+    if (active === CURRENT) currentDesign = nd;
+    else saved = saved.map(s => s.id === active ? { ...s, design: nd } : s);
+  }
+  function stash() { ctxs.set(active, { session, undoStack, redoStack, lastRoute, choice }); }
+  function enter(id) {
+    const c = ctxs.get(id);
+    active = id;
+    design = designOf(id);
+    if (c) ({ session, undoStack, redoStack, lastRoute, choice } = c);
+    else { session = createSession(design); undoStack = []; redoStack = []; lastRoute = null; choice = null; }
+  }
+  const tabName = id => id === CURRENT ? "Current" : (saved.find(s => s.id === id) || {}).name || "";
+  const openTabId = id => { if (!tabs.includes(id)) tabs = [...tabs, id]; };
 
   function change(nd, key, opts = {}) {
     const started = noteChange(session, key);
@@ -2273,7 +2330,7 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
       if (undoStack.length > 200) undoStack.shift();
       redoStack.length = 0;
     }
-    design = nd;
+    commit(nd);
     persist();
     emit("design");
   }
@@ -2286,6 +2343,40 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
     get canUndo() { return undoStack.length > 0; },
     get canRedo() { return redoStack.length > 0; },
     get storageOk() { return storage ? storage.ok : false; },
+
+    // ---- tabs ----
+    get activeTab() { return active; },
+    get currentDesign() { return currentDesign; },
+    // [{ id, name }], "Current" first, then the open saved designs in order.
+    tabList() { return [CURRENT, ...tabs].map(id => ({ id, name: tabName(id) })); },
+    isOpen(id) { return id === CURRENT || tabs.includes(id); },
+    // Switching is not an edit: no badges, no undo step. Each tab keeps its
+    // own undo history and badge baseline.
+    switchTab(id) {
+      if (id === active) return true;
+      if (!api.isOpen(id)) return false;
+      stash(); enter(id);
+      persist(); emit("tab");
+      return true;
+    },
+    openTab(id) {
+      if (!saved.some(s => s.id === id)) return false;
+      openTabId(id);
+      if (!api.switchTab(id)) return false;
+      persist(); emit("tab");
+      return true;
+    },
+    // Closes the tab only; the design stays in Saved designs.
+    closeTab(id) {
+      if (id === CURRENT || !tabs.includes(id)) return false;
+      const list = [CURRENT, ...tabs];
+      const i = list.indexOf(id);
+      if (active === id) { stash(); enter(list[i - 1]); }
+      tabs = tabs.filter(t => t !== id);
+      ctxs.delete(id);
+      persist(); emit("tab");
+      return true;
+    },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
 
     get locks() { return locks; },
@@ -2319,7 +2410,7 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
       const r = route(lr.before, lr.key, lr.value, { locks, mover });
       if (r.refused) return false;
       lastRoute = { ...r, before: lr.before, editId: session.editId };
-      design = r.design;
+      commit(r.design);
       persist();
       emit("design");
       return true;
@@ -2376,12 +2467,14 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
       };
       if (entry.name === letterName(nextLetter)) nextLetter++;
       saved = [...saved, entry];
+      openTabId(entry.id); // its tab opens beside this one; this tab stays active
       persist(); emit("saved");
       return entry;
     },
     addSaved(name, d) {
       const entry = { id: "d" + clock().toString(36) + (seq++).toString(36), name: (name || "").trim().slice(0, 40) || letterName(nextLetter++), design: normalizeDesign(d), created: clock(), compare: false };
       saved = [...saved, entry];
+      openTabId(entry.id);
       persist(); emit("saved");
       return entry;
     },
@@ -2392,7 +2485,9 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
       return !!s;
     },
     overwriteSaved(id) {
+      if (id === active) return;
       saved = saved.map(s => s.id === id ? { ...s, design: clone(design) } : s);
+      if (ctxs.has(id)) ctxs.delete(id); // its tab starts fresh with the new design
       persist(); emit("saved");
     },
     renameSaved(id, name) {
@@ -2403,6 +2498,7 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
       return true;
     },
     deleteSaved(id) {
+      api.closeTab(id); // deleting a design closes its tab
       saved = saved.filter(s => s.id !== id);
       if (settings.badgeBase === id) settings = { ...settings, badgeBase: "last" };
       persist(); emit("saved");
@@ -2420,7 +2516,7 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
   return api;
 }
 
-module.exports = { createStore, letterName, MAX_COMPARE };
+module.exports = { createStore, letterName, MAX_COMPARE, CURRENT };
 
 } };
 defs["draw/chart.js"] = { map: {"./svg.js":"draw/svg.js"}, fn: function (module, exports, require) {
@@ -4419,7 +4515,7 @@ function createExport(box, { store, getVM, setStatus }) {
             h("li", "Click any box. Its part lights up in every drawing. Press ", h("b", "?"), " to learn what it means."),
             h("li", "Check the ", h("b", "fit meters"), ". Green is good. Red needs a fix, and the warning says how."),
             h("li", "Press ", h("b", "Play"), " to watch the pins push the sheet."),
-            h("li", h("b", "Save design"), " to keep it. Check two Compare boxes to see designs side by side."),
+            h("li", h("b", "Save design"), " to keep it. It gets its own tab, and you can change it there. Check two Compare boxes to see designs side by side."),
             h("li", "Lock a box with its padlock to keep that number while you change others."),
             h("li", "When it looks good, use ", h("b", "Make it"), " to copy the OpenSCAD file and save the sheet files.")),
           h("p.term", "Try the buttons under Try these to see what goes wrong, and why.")),
@@ -5656,7 +5752,7 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
 module.exports = { createInputs };
 
 } };
-defs["ui/main.js"] = { map: {"./dom.js":"ui/dom.js","../state/store.js":"state/store.js","../state/storage.js":"state/storage.js","../state/settings.js":"state/settings.js","../state/examples.js":"state/examples.js","../state/fields.js":"state/fields.js","./vm.js":"ui/vm.js","./drawings.js":"ui/drawings.js","./highlight.js":"ui/highlight.js","./inputs.js":"ui/inputs.js","./menubar.js":"ui/menubar.js","./toolbar.js":"ui/toolbar.js","./views.js":"ui/views.js","./tables.js":"ui/tables.js","./summary.js":"ui/summary.js","./dialogs.js":"ui/dialogs.js","./icons.js":"ui/icons.js","../core/format.js":"core/format.js","./saved.js":"ui/saved.js","./settingsdlg.js":"ui/settingsdlg.js","../draw/panels.js":"draw/panels.js","./meters.js":"ui/meters.js","./explain.js":"ui/explain.js","../draw/howitworks.js":"draw/howitworks.js","./export.js":"ui/export.js","./handles.js":"ui/handles.js","../draw/dial.js":"draw/dial.js","../draw/ruler.js":"draw/ruler.js","../draw/layout.js":"draw/layout.js","../draw/closeup.js":"draw/closeup.js","../draw/pinhole.js":"draw/pinhole.js","../draw/chart.js":"draw/chart.js","../draw/hubface.js":"draw/hubface.js","../draw/sheet.js":"draw/sheet.js","../draw/track.js":"draw/track.js"}, fn: function (module, exports, require) {
+defs["ui/main.js"] = { map: {"./dom.js":"ui/dom.js","../state/store.js":"state/store.js","../state/storage.js":"state/storage.js","../state/settings.js":"state/settings.js","../state/examples.js":"state/examples.js","../state/fields.js":"state/fields.js","./vm.js":"ui/vm.js","./drawings.js":"ui/drawings.js","./highlight.js":"ui/highlight.js","./inputs.js":"ui/inputs.js","./menubar.js":"ui/menubar.js","./toolbar.js":"ui/toolbar.js","./views.js":"ui/views.js","./tables.js":"ui/tables.js","./summary.js":"ui/summary.js","./dialogs.js":"ui/dialogs.js","./icons.js":"ui/icons.js","../core/format.js":"core/format.js","./saved.js":"ui/saved.js","./settingsdlg.js":"ui/settingsdlg.js","../draw/panels.js":"draw/panels.js","./meters.js":"ui/meters.js","./explain.js":"ui/explain.js","../draw/howitworks.js":"draw/howitworks.js","./export.js":"ui/export.js","./handles.js":"ui/handles.js","./tabs.js":"ui/tabs.js","../draw/dial.js":"draw/dial.js","../draw/ruler.js":"draw/ruler.js","../draw/layout.js":"draw/layout.js","../draw/closeup.js":"draw/closeup.js","../draw/pinhole.js":"draw/pinhole.js","../draw/chart.js":"draw/chart.js","../draw/hubface.js":"draw/hubface.js","../draw/sheet.js":"draw/sheet.js","../draw/track.js":"draw/track.js"}, fn: function (module, exports, require) {
 "use strict";
 // Wires everything together: state -> analyze() -> view model -> every
 // drawing, table and meter. Nothing here computes geometry.
@@ -5686,6 +5782,7 @@ const { openExplainer, whatsThis } = require("./explain.js");
 const how = require("../draw/howitworks.js");
 const { createExport } = require("./export.js");
 const { createHandles } = require("./handles.js");
+const { createTabs } = require("./tabs.js");
 
 const MODS = {
   dial: require("../draw/dial.js"),
@@ -5819,6 +5916,7 @@ function start() {
     paintPlaybar();
     paintStatus(vm);
     paintChrome();
+    paintTabs();
     if (app.afterRender) for (const fn of app.afterRender) fn(vm);
     highlighter.apply();
     app.lastRenderMs = performance.now() - t0;
@@ -5885,6 +5983,35 @@ function start() {
   function stop() { if (!app.playing) return; app.playing = false; cancelAnimationFrame(raf); paintPlaybar(); paintChrome(); }
   app.play = play; app.stop = stop;
 
+  // ---------- design tabs ----------
+  const tabNote = $("#tab-note");
+  const tabs = createTabs($("#tabstrip"), {
+    store, panel: $("#client"),
+    onSwitch(id) {
+      if (id === store.activeTab) return;
+      stop();
+      store.switchTab(id);
+      const t = store.tabList().find(x => x.id === id);
+      setStatus(id === "current" ? "Back to your current design." : "Showing " + t.name + ". Changes here save into " + t.name + ".");
+    },
+    onClose(id) {
+      const t = store.tabList().find(x => x.id === id);
+      stop();
+      store.closeTab(id);
+      setStatus("Closed the " + t.name + " tab. Open it again from Saved designs.");
+    }
+  });
+  function paintTabs() {
+    tabs.paint();
+    const id = store.activeTab;
+    tabNote.hidden = id === "current";
+    if (id !== "current") {
+      const s = store.getSaved(id);
+      tabNote.textContent = "You are changing " + s.name + ". Changes save into it right away. Undo works inside this tab.";
+    }
+  }
+  app.tabs = tabs;
+
   // ---------- saved designs and comparing ----------
   const storageNote = $("#storage-note");
   function paintStorageNote() {
@@ -5897,7 +6024,7 @@ function start() {
       const n = store.compared().length;
       setStatus(n >= 2 ? "Comparing " + n + " designs. See the Compare box." : n === 1 ? "Check one more design to compare side by side." : "No designs checked.");
     },
-    load(id) { const s = store.getSaved(id); stop(); store.loadSaved(id); setStatus("Loaded " + s.name + ". Badges show what changed."); },
+    open(id) { const s = store.getSaved(id); stop(); store.openTab(id); setStatus("Opened " + s.name + " in its own tab. Changes there save into " + s.name + "."); },
     rename(id) { const s = store.getSaved(id); D.promptBox("Rename design", "New name:", s.name, name => { store.renameSaved(id, name); setStatus("Renamed to " + name + "."); }); },
     remove(id) {
       const s = store.getSaved(id);
@@ -5957,7 +6084,7 @@ function start() {
       }
       cmpTurn(cmpState.frac);
     }
-    renderCompare($("#compare-table"), vm, store.saved);
+    renderCompare($("#compare-table"), vm, store.saved, { active: store.activeTab, current: store.currentDesign });
   }
   function cmpTurn(f) {
     cmpState.frac = f;
@@ -6002,8 +6129,8 @@ function start() {
       if (!r.ok) { D.messageBox("Open a design file", [r.error, "Pick a .sprocket.json file saved from Sprocket Planner."], svgIcon("stopSign", 16)); return; }
       const entry = store.addSaved(r.name, r.design);
       stop();
-      store.loadSaved(entry.id);
-      setStatus("Opened " + entry.name + " and added it to Saved designs.");
+      store.openTab(entry.id);
+      setStatus("Opened " + entry.name + " in its own tab and added it to Saved designs.");
     };
     rd.onerror = () => D.messageBox("Open a design file", ["That file couldn't be read."]);
     rd.readAsText(file);
@@ -6060,7 +6187,7 @@ function start() {
     saveDesign() {
       D.promptBox("Save design", "Name for this design:", store.nextName(), name => {
         const e = store.saveDesign(name);
-        setStatus("Saved " + e.name + ". Check its Compare box to compare it.");
+        setStatus("Saved " + e.name + ". It has its own tab now. Check its Compare box to compare it.");
       });
     },
     saveFile() {
@@ -6453,8 +6580,8 @@ module.exports = { renderMeters, METERS };
 } };
 defs["ui/saved.js"] = { map: {"./dom.js":"ui/dom.js","../core/format.js":"core/format.js"}, fn: function (module, exports, require) {
 "use strict";
-// Saved designs list: each with a Compare check box, Load, Rename, Delete and
-// Save to a file.
+// Saved designs list: each with a Compare check box, Open tab, Rename, Delete
+// and Save to a file.
 const { h } = require("./dom.js");
 const F = require("../core/format.js");
 
@@ -6483,7 +6610,7 @@ function renderSaved(table, { store, actions }) {
       h("th.sname", { scope: "row" }, s.name),
       h("td.ssum", shortSummary(s.design, store.settings.units)),
       h("td.sbtns",
-        mk("Load", () => actions.load(s.id), "Load"),
+        s.id === store.activeTab ? h("span.this-tab", "This tab") : mk(store.isOpen(s.id) ? "Show tab" : "Open tab", () => actions.open(s.id), store.isOpen(s.id) ? "Show the tab for" : "Open a tab for"),
         mk("Rename", () => actions.rename(s.id), "Rename"),
         mk("Delete", () => actions.remove(s.id), "Delete"),
         mk("Save file", () => actions.saveFile(s.id), "Save to a file:"))));
@@ -6741,10 +6868,17 @@ function renderMeasure(table, vm, onPick) {
   table.onkeydown = e => { if (e.key === "Enter") { const tr = e.target.closest("tr.pick"); if (tr && onPick) onPick(tr.getAttribute("data-key")); } };
 }
 
-function renderCompare(table, vm, saved) {
+// "Now" is the open tab's design. While a saved design's tab is open, the
+// Current design gets its own column, and the open design's column is marked
+// "this tab" with no badges (it is Now).
+function renderCompare(table, vm, saved, { active = "current", current = null } = {}) {
   table.innerHTML = "";
   const head = h("tr", h("th", { scope: "col" }, ""), h("th.now", { scope: "col" }, "Now"));
-  for (const s of saved) head.appendChild(h("th", { scope: "col", class: s.compare ? "cmp-on" : "" }, s.name));
+  const cols = [];
+  if (active !== "current" && current) cols.push({ id: "current", name: "Current", design: current, compare: false });
+  cols.push(...saved);
+  saved = cols;
+  for (const s of saved) head.appendChild(h("th", { scope: "col", class: (s.compare ? "cmp-on" : "") + (s.id === active ? " this-tab" : "") }, s.id === active ? s.name + " (this tab)" : s.name));
   table.appendChild(h("thead", head));
   const tb = h("tbody");
   const now = vm.model;
@@ -6760,8 +6894,8 @@ function renderCompare(table, vm, saved) {
     const tr = h("tr", { "data-hl": key }, h("th", { scope: "row" }, meta.name || k), h("td.num.now", fmtv(now)));
     for (const s of saved) {
       const m = vm.analyze(s.design);
-      const b = now.ok && m.ok ? vm.badgeVs(k, m.v[k], now.v[k]) : null;
-      tr.appendChild(h("td.num", { class: s.compare ? "cmp-on" : "" }, fmtv(m), b ? h("span", { class: "bdg " + b.cls, "aria-label": b.aria + " compared with now" }, " " + b.text) : null));
+      const b = now.ok && m.ok && s.id !== active ? vm.badgeVs(k, m.v[k], now.v[k]) : null;
+      tr.appendChild(h("td.num", { class: (s.compare ? "cmp-on" : "") + (s.id === active ? " this-tab" : "") }, fmtv(m), b ? h("span", { class: "bdg " + b.cls, "aria-label": b.aria + " compared with now" }, " " + b.text) : null));
     }
     tb.appendChild(tr);
   }
@@ -6769,6 +6903,79 @@ function renderCompare(table, vm, saved) {
 }
 
 module.exports = { renderMeasure, renderCompare, valueText };
+
+} };
+defs["ui/tabs.js"] = { map: {"./dom.js":"ui/dom.js"}, fn: function (module, exports, require) {
+"use strict";
+// Design tabs: "Current" plus one tab per open saved design, in a Windows 98
+// property-sheet strip above the workspace. Each tab is the whole planner for
+// that design. Arrow keys, Home and End move between tabs (tablist pattern).
+const { h } = require("./dom.js");
+
+function createTabs(strip, { store, onSwitch, onClose, panel }) {
+  strip.setAttribute("role", "tablist");
+  strip.setAttribute("aria-label", "Designs");
+  let sig = "";
+
+  function paint() {
+    const list = store.tabList();
+    const active = store.activeTab;
+    const s = JSON.stringify([list, active]);
+    if (s === sig) return;
+    const hadFocus = strip.contains(document.activeElement) && document.activeElement.getAttribute("role") === "tab";
+    sig = s;
+    strip.innerHTML = "";
+    for (const t of list) {
+      const on = t.id === active;
+      const tab = h("button.dtab", {
+        type: "button", role: "tab", id: "tab-" + t.id, "data-tab": t.id,
+        "aria-selected": String(on), "aria-controls": panel.id, tabindex: on ? "0" : "-1",
+        title: t.id === "current" ? "Your working design" : t.name + ": edits here save into this saved design"
+      }, t.name);
+      tab.addEventListener("click", () => onSwitch(t.id));
+      const li = h("li", { role: "presentation", class: on ? "on" : "" }, tab);
+      if (t.id !== "current") {
+        const x = h("button.dtab-x", { type: "button", "aria-label": "Close tab " + t.name, title: "Close tab (the design stays in Saved designs)", tabindex: on ? "0" : "-1" }, "×");
+        x.addEventListener("click", e => { e.stopPropagation(); onClose(t.id); });
+        li.appendChild(x);
+      }
+      strip.appendChild(li);
+    }
+    panel.setAttribute("role", "tabpanel");
+    panel.setAttribute("aria-labelledby", "tab-" + active);
+    const cur = strip.querySelector('[role=tab][aria-selected="true"]');
+    if (cur) {
+      // keep the active tab in view inside the strip, without scrolling the page
+      const li = cur.parentElement;
+      const l = li.offsetLeft, r = l + li.offsetWidth;
+      if (l < strip.scrollLeft) strip.scrollLeft = l;
+      else if (r > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = r - strip.clientWidth;
+      if (hadFocus) cur.focus({ preventScroll: true });
+    }
+  }
+
+  strip.addEventListener("keydown", e => {
+    const tab = e.target.closest("[role=tab]");
+    if (!tab) return;
+    const tabs = [...strip.querySelectorAll("[role=tab]")];
+    const i = tabs.indexOf(tab);
+    let j = -1;
+    if (e.key === "ArrowRight") j = (i + 1) % tabs.length;
+    else if (e.key === "ArrowLeft") j = (i - 1 + tabs.length) % tabs.length;
+    else if (e.key === "Home") j = 0;
+    else if (e.key === "End") j = tabs.length - 1;
+    else if (e.key === "Delete" && tab.dataset.tab !== "current") { e.preventDefault(); onClose(tab.dataset.tab); return; }
+    if (j < 0) return;
+    e.preventDefault();
+    onSwitch(tabs[j].dataset.tab);
+    const next = strip.querySelector('[data-tab="' + tabs[j].dataset.tab + '"]');
+    if (next) next.focus({ preventScroll: true });
+  });
+
+  return { paint };
+}
+
+module.exports = { createTabs };
 
 } };
 defs["ui/toolbar.js"] = { map: {"./dom.js":"ui/dom.js","./icons.js":"ui/icons.js"}, fn: function (module, exports, require) {
@@ -6958,11 +7165,14 @@ function buildVM(store, theta) {
   const last = analyzeCached(store.session.base);
   const changed = JSON.stringify(store.session.base) !== JSON.stringify(design);
   let base = last, baseLabel = "the last change";
-  if (s.badgeBase !== "last") {
+  // A design never badges or ghosts against itself: while its own tab is
+  // open, "home base" falls back to the last change and it isn't a ghost.
+  const activeTab = store.activeTab;
+  if (s.badgeBase !== "last" && s.badgeBase !== activeTab) {
     const sv = store.getSaved(s.badgeBase);
     if (sv) { base = analyzeCached(sv.design); baseLabel = sv.name; }
   }
-  const compared = store.compared();
+  const compared = store.compared().filter(sv => sv.id !== activeTab);
   const ghosts = [];
   if (s.ghost) {
     if ((s.compareWith === "last" || s.compareWith === "both") && changed) ghosts.push({ m: last, label: "before", cls: "g-last", kind: "last" });

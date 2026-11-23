@@ -27,6 +27,7 @@ const { openExplainer, whatsThis } = require("./explain.js");
 const how = require("../draw/howitworks.js");
 const { createExport } = require("./export.js");
 const { createHandles } = require("./handles.js");
+const { createTabs } = require("./tabs.js");
 
 const MODS = {
   dial: require("../draw/dial.js"),
@@ -160,6 +161,7 @@ function start() {
     paintPlaybar();
     paintStatus(vm);
     paintChrome();
+    paintTabs();
     if (app.afterRender) for (const fn of app.afterRender) fn(vm);
     highlighter.apply();
     app.lastRenderMs = performance.now() - t0;
@@ -226,6 +228,35 @@ function start() {
   function stop() { if (!app.playing) return; app.playing = false; cancelAnimationFrame(raf); paintPlaybar(); paintChrome(); }
   app.play = play; app.stop = stop;
 
+  // ---------- design tabs ----------
+  const tabNote = $("#tab-note");
+  const tabs = createTabs($("#tabstrip"), {
+    store, panel: $("#client"),
+    onSwitch(id) {
+      if (id === store.activeTab) return;
+      stop();
+      store.switchTab(id);
+      const t = store.tabList().find(x => x.id === id);
+      setStatus(id === "current" ? "Back to your current design." : "Showing " + t.name + ". Changes here save into " + t.name + ".");
+    },
+    onClose(id) {
+      const t = store.tabList().find(x => x.id === id);
+      stop();
+      store.closeTab(id);
+      setStatus("Closed the " + t.name + " tab. Open it again from Saved designs.");
+    }
+  });
+  function paintTabs() {
+    tabs.paint();
+    const id = store.activeTab;
+    tabNote.hidden = id === "current";
+    if (id !== "current") {
+      const s = store.getSaved(id);
+      tabNote.textContent = "You are changing " + s.name + ". Changes save into it right away. Undo works inside this tab.";
+    }
+  }
+  app.tabs = tabs;
+
   // ---------- saved designs and comparing ----------
   const storageNote = $("#storage-note");
   function paintStorageNote() {
@@ -238,7 +269,7 @@ function start() {
       const n = store.compared().length;
       setStatus(n >= 2 ? "Comparing " + n + " designs. See the Compare box." : n === 1 ? "Check one more design to compare side by side." : "No designs checked.");
     },
-    load(id) { const s = store.getSaved(id); stop(); store.loadSaved(id); setStatus("Loaded " + s.name + ". Badges show what changed."); },
+    open(id) { const s = store.getSaved(id); stop(); store.openTab(id); setStatus("Opened " + s.name + " in its own tab. Changes there save into " + s.name + "."); },
     rename(id) { const s = store.getSaved(id); D.promptBox("Rename design", "New name:", s.name, name => { store.renameSaved(id, name); setStatus("Renamed to " + name + "."); }); },
     remove(id) {
       const s = store.getSaved(id);
@@ -298,7 +329,7 @@ function start() {
       }
       cmpTurn(cmpState.frac);
     }
-    renderCompare($("#compare-table"), vm, store.saved);
+    renderCompare($("#compare-table"), vm, store.saved, { active: store.activeTab, current: store.currentDesign });
   }
   function cmpTurn(f) {
     cmpState.frac = f;
@@ -343,8 +374,8 @@ function start() {
       if (!r.ok) { D.messageBox("Open a design file", [r.error, "Pick a .sprocket.json file saved from Sprocket Planner."], svgIcon("stopSign", 16)); return; }
       const entry = store.addSaved(r.name, r.design);
       stop();
-      store.loadSaved(entry.id);
-      setStatus("Opened " + entry.name + " and added it to Saved designs.");
+      store.openTab(entry.id);
+      setStatus("Opened " + entry.name + " in its own tab and added it to Saved designs.");
     };
     rd.onerror = () => D.messageBox("Open a design file", ["That file couldn't be read."]);
     rd.readAsText(file);
@@ -401,7 +432,7 @@ function start() {
     saveDesign() {
       D.promptBox("Save design", "Name for this design:", store.nextName(), name => {
         const e = store.saveDesign(name);
-        setStatus("Saved " + e.name + ". Check its Compare box to compare it.");
+        setStatus("Saved " + e.name + ". It has its own tab now. Check its Compare box to compare it.");
       });
     },
     saveFile() {

@@ -1,6 +1,6 @@
 "use strict";
-// Saved designs list: each with a Compare check box, Load, Rename, Delete and
-// Save to a file.
+// Saved designs list: each with a Compare check box, Open tab, Rename, Delete
+// and Save to a file.
 const { h } = require("./dom.js");
 const F = require("../core/format.js");
 
@@ -29,7 +29,7 @@ function renderSaved(table, { store, actions }) {
       h("th.sname", { scope: "row" }, s.name),
       h("td.ssum", shortSummary(s.design, store.settings.units)),
       h("td.sbtns",
-        mk("Load", () => actions.load(s.id), "Load"),
+        s.id === store.activeTab ? h("span.this-tab", "This tab") : mk(store.isOpen(s.id) ? "Show tab" : "Open tab", () => actions.open(s.id), store.isOpen(s.id) ? "Show the tab for" : "Open a tab for"),
         mk("Rename", () => actions.rename(s.id), "Rename"),
         mk("Delete", () => actions.remove(s.id), "Delete"),
         mk("Save file", () => actions.saveFile(s.id), "Save to a file:"))));

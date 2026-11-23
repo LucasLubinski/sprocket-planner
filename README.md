@@ -10,6 +10,7 @@ One self-contained web page, `dist/planner.html`, where students design a 3D-pri
 
 - **Give students only `dist/planner.html`.** Everything is inside it: the code, the Windows 98 look and its font, and the full OpenSCAD model. Use a USB stick, a shared drive or email (it's about 0.4 MB).
 - **Windows:** double-click it. It opens in Chrome. **Chromebook:** open it from the Files app.
+- **Saved designs are tabs.** "Current" is the working design. Each saved design opens as its own tab under the toolbar, and edits there save straight into that design. Each tab keeps its own undo and change badges. Closing a tab (×) keeps the design; Open tab in Saved designs brings it back.
 - **Saved designs live in that browser on that laptop.** They don't travel with the file. To move a design to another laptop, use **File ▸ Save design to a file…**, then **Open a design file…** on the other laptop.
 - **Handing out a newer version:** replace the old `planner.html` with the new one. Saved designs, settings and locks carry over, because every version reads the same storage key (`sprocketPlanner.v1` in `state/storage.js`). If you ever change what's stored, add the old key to `OLDER_KEYS` and convert it in `migrate()`.
 - **If storage is blocked** (some school setups), the page still works and says designs won't be remembered.

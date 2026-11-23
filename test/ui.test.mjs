@@ -233,6 +233,72 @@ test("planner UI in headless Chrome", { skip: !chrome && "Chrome not found", tim
       assert.equal(await ev(`__t.val("rotation")`), "180", "current design remembered");
     });
 
+    await t.test("saved designs as tabs: open, edit in a tab, no badges on switching, arrow keys, reload", async () => {
+      await fresh();
+      const r = await ev(`(async () => {
+        const sp = __t.sp(), st = sp.store;
+        st.saveDesign("Design A");
+        st.beginEdit("t"); st.setField("rotation", 180);
+        st.saveDesign("Design B");
+        await __t.settle();
+        const tabs0 = [...document.querySelectorAll("#tabstrip [role=tab]")].map(t => t.textContent);
+        document.querySelector('#tabstrip [role=tab][data-tab="' + st.saved[0].id + '"]').click();
+        await __t.settle();
+        const aRot = __t.val("rotation"), aBadges = [...document.querySelectorAll("#pane-inputs .bdg-slot")].filter(e => e.textContent.trim()).length;
+        const note = document.getElementById("tab-note").hidden;
+        const selected = document.querySelector("#tabstrip [aria-selected=true]").textContent;
+        const panel = document.getElementById("client").getAttribute("aria-labelledby");
+        return { tabs0, aRot, aBadges, note, selected, panel, aId: st.saved[0].id };
+      })()`);
+      assert.deepEqual(r.tabs0, ["Current", "Design A", "Design B"]);
+      assert.equal(r.aRot, "360", "Design A's numbers");
+      assert.equal(r.aBadges, 0, "switching tabs makes no badges");
+      assert.equal(r.note, false, "a note says edits save into the design");
+      assert.equal(r.selected, "Design A");
+      assert.equal(r.panel, "tab-" + r.aId);
+      await typeInto("teeth", "24"); await blur();
+      const e = await ev(`(() => { const st = __t.sp().store; return [st.saved[0].design.teeth, st.currentDesign.teeth, __t.badge("P")]; })()`);
+      assert.deepEqual(e.slice(0, 2), [24, 16], "edit in tab A saves into A, Current untouched");
+      assert.match(e[2], /▼/);
+      // arrow keys move between tabs, and focus follows
+      await ev(`document.querySelector("#tabstrip [aria-selected=true]").focus(); 1`);
+      await page.key("ArrowRight"); await settle();
+      assert.equal(await ev(`document.querySelector("#tabstrip [aria-selected=true]").textContent`), "Design B");
+      assert.equal(await ev(`document.activeElement.textContent`), "Design B", "focus follows");
+      await page.key("Home"); await settle();
+      assert.equal(await ev(`__t.sp().store.activeTab`), "current");
+      // closing a tab keeps the design; Open tab in Saved designs brings it back
+      await ev(`document.querySelector('#tabstrip [data-tab="' + __t.sp().store.saved[1].id + '"] + .dtab-x').click(); 1`); await settle();
+      assert.equal(await ev(`document.querySelectorAll("#tabstrip [role=tab]").length`), 2);
+      assert.equal(await ev(`__t.sp().store.saved.length`), 2);
+      await ev(`[...document.querySelectorAll("#saved-list button")].find(b => b.textContent === "Open tab").click(); 1`); await settle();
+      assert.equal(await ev(`document.querySelector("#tabstrip [aria-selected=true]").textContent`), "Design B");
+      // reload keeps the tabs and the active one
+      await page.goto(URL); await ev(HELPERS); await settle();
+      assert.deepEqual(await ev(`[...document.querySelectorAll("#tabstrip [role=tab]")].map(t => t.textContent)`), ["Current", "Design A", "Design B"]);
+      assert.equal(await ev(`document.querySelector("#tabstrip [aria-selected=true]").textContent`), "Design B");
+      assert.equal(await ev(`__t.val("rotation")`), "180");
+    });
+
+    await t.test("tabs at 390 px: many tabs scroll inside the strip, no sideways page scroll, 44 px close buttons", async () => {
+      await fresh(390, 844);
+      const r = await ev(`(async () => {
+        const st = __t.sp().store;
+        for (let i = 0; i < 7; i++) st.saveDesign(st.nextName());
+        st.switchTab(st.saved[6].id);
+        await __t.settle();
+        const strip = document.getElementById("tabstrip");
+        const x = strip.querySelector("li.on .dtab-x").getBoundingClientRect();
+        const on = strip.querySelector("li.on").getBoundingClientRect(), sr = strip.getBoundingClientRect();
+        return { scrollW: document.scrollingElement.scrollWidth, inner: innerWidth, stripScrolls: strip.scrollWidth > strip.clientWidth,
+          activeVisible: on.left >= sr.left - 3 && on.right <= sr.right + 3, xw: x.width, xh: x.height };
+      })()`);
+      assert.ok(r.scrollW <= r.inner, "no sideways page scroll");
+      assert.ok(r.stripScrolls, "the strip scrolls instead");
+      assert.ok(r.activeVisible, "the active tab is scrolled into view");
+      assert.ok(r.xw >= 44 && r.xh >= 44, "close button is a 44 px target");
+    });
+
     // ---------------- making it (phase 5) ----------------
     await t.test("Copy OpenSCAD file copies the whole model with the current numbers", async () => {
       await fresh();

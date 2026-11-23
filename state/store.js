@@ -7,6 +7,8 @@ const { defaultDesign, normalizeDesign } = require("../core/params.js");
 const { normalizeSettings } = require("./settings.js");
 
 const MAX_COMPARE = 4;
+// The working design's tab. Every other tab is a saved design's id.
+const CURRENT = "current";
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 function letterName(i) {
@@ -28,7 +30,7 @@ function normalizeSaved(e, i) {
 
 function createStore({ storage = null, clock = () => Date.now() } = {}) {
   const loaded = storage ? storage.load() : null;
-  let design = loaded && loaded.design ? normalizeDesign(loaded.design) : defaultDesign();
+  let currentDesign = loaded && loaded.design ? normalizeDesign(loaded.design) : defaultDesign();
   let settings = normalizeSettings(loaded && loaded.settings);
   let saved = (loaded && Array.isArray(loaded.saved) ? loaded.saved : []).map(normalizeSaved).filter(Boolean);
   let nextLetter = loaded && Number.isInteger(loaded.nextLetter) ? loaded.nextLetter : saved.length;
@@ -39,13 +41,41 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
   // The routing of the current edit: what moved, the options, the student's pick.
   let lastRoute = null, choice = null;
   let seq = 0;
-  const session = createSession(design);
-  const undoStack = [], redoStack = [];
+  // Tabs: "Current" plus one per open saved design. Data saved before tabs
+  // existed has no tab list, so every saved design opens as a tab.
+  let tabs = [...new Set((loaded && Array.isArray(loaded.tabs) ? loaded.tabs : saved.map(s => s.id))
+    .filter(id => saved.some(s => s.id === id)))];
+  let active = loaded && tabs.includes(loaded.activeTab) ? loaded.activeTab : CURRENT;
+  const designOf = id => id === CURRENT ? currentDesign : (saved.find(s => s.id === id) || {}).design;
+  // The active tab's design, edit session (badge baseline) and undo history.
+  // Other tabs keep theirs in ctxs while they wait.
+  let design = designOf(active);
+  let session = createSession(design);
+  let undoStack = [], redoStack = [];
+  const ctxs = new Map();
   const listeners = new Set();
   if (settings.badgeBase !== "last" && !saved.some(s => s.id === settings.badgeBase)) settings = { ...settings, badgeBase: "last" };
 
   const emit = kind => { for (const fn of listeners) fn(kind); };
-  const persist = () => { if (storage) storage.save({ design, settings, saved, nextLetter, locks }); };
+  const persist = () => { if (storage) storage.save({ design: currentDesign, settings, saved, nextLetter, locks, tabs, activeTab: active }); };
+
+  // The active tab's design changes. A saved design's tab is that saved
+  // design, live, so its edits go straight back into the saved entry.
+  function commit(nd) {
+    design = nd;
+    if (active === CURRENT) currentDesign = nd;
+    else saved = saved.map(s => s.id === active ? { ...s, design: nd } : s);
+  }
+  function stash() { ctxs.set(active, { session, undoStack, redoStack, lastRoute, choice }); }
+  function enter(id) {
+    const c = ctxs.get(id);
+    active = id;
+    design = designOf(id);
+    if (c) ({ session, undoStack, redoStack, lastRoute, choice } = c);
+    else { session = createSession(design); undoStack = []; redoStack = []; lastRoute = null; choice = null; }
+  }
+  const tabName = id => id === CURRENT ? "Current" : (saved.find(s => s.id === id) || {}).name || "";
+  const openTabId = id => { if (!tabs.includes(id)) tabs = [...tabs, id]; };
 
   function change(nd, key, opts = {}) {
     const started = noteChange(session, key);
@@ -54,7 +84,7 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
       if (undoStack.length > 200) undoStack.shift();
       redoStack.length = 0;
     }
-    design = nd;
+    commit(nd);
     persist();
     emit("design");
   }
@@ -67,6 +97,40 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
     get canUndo() { return undoStack.length > 0; },
     get canRedo() { return redoStack.length > 0; },
     get storageOk() { return storage ? storage.ok : false; },
+
+    // ---- tabs ----
+    get activeTab() { return active; },
+    get currentDesign() { return currentDesign; },
+    // [{ id, name }], "Current" first, then the open saved designs in order.
+    tabList() { return [CURRENT, ...tabs].map(id => ({ id, name: tabName(id) })); },
+    isOpen(id) { return id === CURRENT || tabs.includes(id); },
+    // Switching is not an edit: no badges, no undo step. Each tab keeps its
+    // own undo history and badge baseline.
+    switchTab(id) {
+      if (id === active) return true;
+      if (!api.isOpen(id)) return false;
+      stash(); enter(id);
+      persist(); emit("tab");
+      return true;
+    },
+    openTab(id) {
+      if (!saved.some(s => s.id === id)) return false;
+      openTabId(id);
+      if (!api.switchTab(id)) return false;
+      persist(); emit("tab");
+      return true;
+    },
+    // Closes the tab only; the design stays in Saved designs.
+    closeTab(id) {
+      if (id === CURRENT || !tabs.includes(id)) return false;
+      const list = [CURRENT, ...tabs];
+      const i = list.indexOf(id);
+      if (active === id) { stash(); enter(list[i - 1]); }
+      tabs = tabs.filter(t => t !== id);
+      ctxs.delete(id);
+      persist(); emit("tab");
+      return true;
+    },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
 
     get locks() { return locks; },
@@ -100,7 +164,7 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
       const r = route(lr.before, lr.key, lr.value, { locks, mover });
       if (r.refused) return false;
       lastRoute = { ...r, before: lr.before, editId: session.editId };
-      design = r.design;
+      commit(r.design);
       persist();
       emit("design");
       return true;
@@ -157,12 +221,14 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
       };
       if (entry.name === letterName(nextLetter)) nextLetter++;
       saved = [...saved, entry];
+      openTabId(entry.id); // its tab opens beside this one; this tab stays active
       persist(); emit("saved");
       return entry;
     },
     addSaved(name, d) {
       const entry = { id: "d" + clock().toString(36) + (seq++).toString(36), name: (name || "").trim().slice(0, 40) || letterName(nextLetter++), design: normalizeDesign(d), created: clock(), compare: false };
       saved = [...saved, entry];
+      openTabId(entry.id);
       persist(); emit("saved");
       return entry;
     },
@@ -173,7 +239,9 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
       return !!s;
     },
     overwriteSaved(id) {
+      if (id === active) return;
       saved = saved.map(s => s.id === id ? { ...s, design: clone(design) } : s);
+      if (ctxs.has(id)) ctxs.delete(id); // its tab starts fresh with the new design
       persist(); emit("saved");
     },
     renameSaved(id, name) {
@@ -184,6 +252,7 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
       return true;
     },
     deleteSaved(id) {
+      api.closeTab(id); // deleting a design closes its tab
       saved = saved.filter(s => s.id !== id);
       if (settings.badgeBase === id) settings = { ...settings, badgeBase: "last" };
       persist(); emit("saved");
@@ -201,4 +270,4 @@ function createStore({ storage = null, clock = () => Date.now() } = {}) {
   return api;
 }
 
-module.exports = { createStore, letterName, MAX_COMPARE };
+module.exports = { createStore, letterName, MAX_COMPARE, CURRENT };

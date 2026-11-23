@@ -83,7 +83,7 @@ function createExport(box, { store, getVM, setStatus }) {
             h("li", "Click any box. Its part lights up in every drawing. Press ", h("b", "?"), " to learn what it means."),
             h("li", "Check the ", h("b", "fit meters"), ". Green is good. Red needs a fix, and the warning says how."),
             h("li", "Press ", h("b", "Play"), " to watch the pins push the sheet."),
-            h("li", h("b", "Save design"), " to keep it. Check two Compare boxes to see designs side by side."),
+            h("li", h("b", "Save design"), " to keep it. It gets its own tab, and you can change it there. Check two Compare boxes to see designs side by side."),
             h("li", "Lock a box with its padlock to keep that number while you change others."),
             h("li", "When it looks good, use ", h("b", "Make it"), " to copy the OpenSCAD file and save the sheet files.")),
           h("p.term", "Try the buttons under Try these to see what goes wrong, and why.")),

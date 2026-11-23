@@ -551,3 +551,28 @@ svg.drw text.dl-edit { cursor: text; text-decoration: underline dotted; }
 .drawing.editing-on { position: relative; }
 .tip-edit { position: absolute; z-index: 5; height: 30px; font-size: 14px; padding: 2px 6px; }
 .drag-route { margin: 6px 0 0; }
+
+/* ---- design tabs (Current + one per open saved design) ---- */
+.dtabs-wrap { padding: 6px 6px 0; border-bottom: 1px solid var(--hilight); box-shadow: 0 1px 0 var(--light); }
+menu.dtabs { display: flex; flex-wrap: nowrap; list-style: none; margin: 0 0 -1px; padding: 2px 3px 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+menu.dtabs > li { display: flex; align-items: stretch; flex: 0 0 auto; position: relative; background: var(--face); border-top-left-radius: 3px; border-top-right-radius: 3px;
+  box-shadow: inset -1px 0 var(--dkshadow), inset 1px 1px var(--light), inset -2px 0 var(--shadow), inset 2px 2px var(--hilight); margin-top: 3px; }
+menu.dtabs > li.on { margin-top: 0; padding-bottom: 4px; z-index: 2; margin-left: -2px; margin-right: -2px; }
+menu.dtabs > li:first-child.on { margin-left: 0; }
+.dtab { background: none; box-shadow: none; min-width: 0; min-height: 30px; padding: 0 12px; font-size: 14px; white-space: nowrap; max-width: 16em; overflow: hidden; text-overflow: ellipsis; }
+.dtab:not(:disabled):active { box-shadow: none; }
+li.on > .dtab { font-weight: bold; }
+.dtab:focus-visible { outline: 1px dotted var(--text); outline-offset: -5px; }
+.dtab-x { background: none; box-shadow: none; min-width: 26px; min-height: 26px; padding: 0 6px 0 0; font-size: 16px; line-height: 1; align-self: center; color: var(--text); }
+.dtab-x:hover { color: #a00000; }
+.dtab-x:not(:disabled):active { box-shadow: none; }
+.dtab-x:focus-visible { outline: 1px dotted var(--text); outline-offset: -3px; }
+.tab-note { margin: 0 6px; padding: 4px 8px; font-size: 13px; background: #ffffe1; border: 1px solid var(--dkshadow); color: #000; }
+.tab-note[hidden] { display: none; }
+table.cmp th.this-tab, table.cmp td.this-tab { font-style: italic; }
+@media (any-pointer: coarse) {
+  .dtab { min-height: 44px; }
+  .dtab-x { min-width: 44px; min-height: 44px; padding: 0; }
+}
+@media (max-width: 900px) { .dtabs-wrap { padding: 4px 2px 0; } }
+table.saved td.sbtns span.this-tab { align-self: center; padding: 0 8px; font-style: italic; }

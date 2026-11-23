@@ -35,11 +35,14 @@ function buildVM(store, theta) {
   const last = analyzeCached(store.session.base);
   const changed = JSON.stringify(store.session.base) !== JSON.stringify(design);
   let base = last, baseLabel = "the last change";
-  if (s.badgeBase !== "last") {
+  // A design never badges or ghosts against itself: while its own tab is
+  // open, "home base" falls back to the last change and it isn't a ghost.
+  const activeTab = store.activeTab;
+  if (s.badgeBase !== "last" && s.badgeBase !== activeTab) {
     const sv = store.getSaved(s.badgeBase);
     if (sv) { base = analyzeCached(sv.design); baseLabel = sv.name; }
   }
-  const compared = store.compared();
+  const compared = store.compared().filter(sv => sv.id !== activeTab);
   const ghosts = [];
   if (s.ghost) {
     if ((s.compareWith === "last" || s.compareWith === "both") && changed) ghosts.push({ m: last, label: "before", cls: "g-last", kind: "last" });

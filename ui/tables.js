@@ -49,10 +49,17 @@ function renderMeasure(table, vm, onPick) {
   table.onkeydown = e => { if (e.key === "Enter") { const tr = e.target.closest("tr.pick"); if (tr && onPick) onPick(tr.getAttribute("data-key")); } };
 }
 
-function renderCompare(table, vm, saved) {
+// "Now" is the open tab's design. While a saved design's tab is open, the
+// Current design gets its own column, and the open design's column is marked
+// "this tab" with no badges (it is Now).
+function renderCompare(table, vm, saved, { active = "current", current = null } = {}) {
   table.innerHTML = "";
   const head = h("tr", h("th", { scope: "col" }, ""), h("th.now", { scope: "col" }, "Now"));
-  for (const s of saved) head.appendChild(h("th", { scope: "col", class: s.compare ? "cmp-on" : "" }, s.name));
+  const cols = [];
+  if (active !== "current" && current) cols.push({ id: "current", name: "Current", design: current, compare: false });
+  cols.push(...saved);
+  saved = cols;
+  for (const s of saved) head.appendChild(h("th", { scope: "col", class: (s.compare ? "cmp-on" : "") + (s.id === active ? " this-tab" : "") }, s.id === active ? s.name + " (this tab)" : s.name));
   table.appendChild(h("thead", head));
   const tb = h("tbody");
   const now = vm.model;
@@ -68,8 +75,8 @@ function renderCompare(table, vm, saved) {
     const tr = h("tr", { "data-hl": key }, h("th", { scope: "row" }, meta.name || k), h("td.num.now", fmtv(now)));
     for (const s of saved) {
       const m = vm.analyze(s.design);
-      const b = now.ok && m.ok ? vm.badgeVs(k, m.v[k], now.v[k]) : null;
-      tr.appendChild(h("td.num", { class: s.compare ? "cmp-on" : "" }, fmtv(m), b ? h("span", { class: "bdg " + b.cls, "aria-label": b.aria + " compared with now" }, " " + b.text) : null));
+      const b = now.ok && m.ok && s.id !== active ? vm.badgeVs(k, m.v[k], now.v[k]) : null;
+      tr.appendChild(h("td.num", { class: (s.compare ? "cmp-on" : "") + (s.id === active ? " this-tab" : "") }, fmtv(m), b ? h("span", { class: "bdg " + b.cls, "aria-label": b.aria + " compared with now" }, " " + b.text) : null));
     }
     tb.appendChild(tr);
   }
