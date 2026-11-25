@@ -14,8 +14,9 @@ It runs in your web browser. There's nothing to install and no account to make.
 2. **Type how far the wheel turns and how far the sheet slides.** For example, turn 360° and slide 6 in. Everything else follows.
 3. **Watch the drawings change.** Green ▲ and red ▼ badges show what went up or down, and by how much.
 4. **Click any box** to see its part light up in the drawings. Press the **?** next to it to learn what it means.
-5. **Check the fit meters.** Green is good. If one turns red, its warning tells you how to fix it.
-6. **Press Play** to watch the pins push the sheet.
+5. **Change numbers right in the drawings.** Click any underlined number, type a new value and press Enter (Escape cancels). Some also have a pink dot you can drag.
+6. **Check the fit meters.** Green is good. If one turns red, its warning tells you how to fix it.
+7. **Press Play** to watch the pins push the sheet.
 
 Not sure where to start? Try the buttons under **Try these**. Each one loads a design that shows a common problem.
 
@@ -85,12 +86,14 @@ Designs, settings and locks are kept in the browser's localStorage under `sprock
 
 - The model is `reference/polycarb_sprocket.scad`. The build copies it into the page unchanged. "Copy OpenSCAD file" changes only the values on the parameter lines, between `/* [What to make] */` and `/* [Hidden] */`.
 - To add a parameter, add its line to the .scad file, then add its design key and OpenSCAD name to `SCAD_NAMES` and its default to `BASE` in `core/params.js`. Add an input in `state/fields.js` if students should see it.
-- Keep the .scad defaults and the `BASE` defaults the same. A test checks that the default design copies out byte-for-byte equal to the .scad file.
+- Keep the .scad defaults and the `BASE` defaults the same.
+- The copied file adds one setting the reference file doesn't have: `withPinCenter()` in `core/scad.js` inserts a `pin_center` line after `pin_flat` and rewrites the `pin_z` line to use it. A test checks that the default design copies out as the .scad file plus exactly those two lines. If you rename `pin_flat` or `pin_z` in the .scad file, update `withPinCenter()` too.
+- **Copy settings only** can't center the pins in a .scad file that was copied before `pin_center` existed, because that file's `pin_z` line ignores it. Use **Copy OpenSCAD file** instead.
 - Run `node --test` and `node tools/build.mjs`, then publish. Then render the copied file in OpenSCAD and check that it still renders without errors.
 
 ### How it's built
 
-One data flow: the design (`state/store.js`) goes through `analyze()` (`core/analyze.js`) to a view model (`ui/vm.js`) that every drawing, table and meter reads. No drawing works out geometry on its own. Every dimension in a drawing is an object (`draw/svg.js`) with its setting, anchors, label and drag rule. The same objects drive highlighting, badges on labels, drag handles and type-in-place (`ui/handles.js`).
+One data flow: the design (`state/store.js`) goes through `analyze()` (`core/analyze.js`) to a view model (`ui/vm.js`) that every drawing, table and meter reads. No drawing works out geometry on its own. Every dimension in a drawing is an object (`draw/svg.js`) with its setting, anchors, label and drag rule. The same objects drive highlighting, badges on labels, drag handles and type-in-place (`ui/handles.js`). Set `editable: true` on a dimension to make its label clickable; add `drag` and `handle` for a drag dot too. A label that shows a result tied to one input uses `show` (the number it shows) and `set: { key, from }` (the input it changes and how), for example slot height sets the track clearance to slot height − sheet thickness.
 
 | Folder | What's in it |
 | --- | --- |

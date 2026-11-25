@@ -183,7 +183,7 @@ function solve(design, key, value, mover, locks = []) {
       d.hub = value;
       if (value === "gobilda") Object.assign(d, GOBILDA_HUB);
       return d;
-    case "pilot": d.pilot = !!value; return d;
+    case "pilot": case "pinCenter": d[key] = !!value; return d;
     case "sheetLen": case "rowOffset": d[key] = value === null ? null : value; return d;
     default: d[key] = value; return d;
   }

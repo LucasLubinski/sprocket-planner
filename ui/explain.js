@@ -126,6 +126,14 @@ const ANIMS = {
       '<rect x="60" y="0" width="100" height="' + r1(22 + f * 0.3 - 0) + '" fill="var(--paper)"/><rect x="60" y="' + r1(90 - f * 0.3) + '" width="100" height="30" fill="var(--paper)"/>' +
       '<path d="M60 ' + r1(22 + f * 0.3) + ' H160 M60 ' + r1(90 - f * 0.3) + ' H160" stroke="' + C.hl + '" stroke-width="2"/>' + label(110, 108, "trimmed flat to print");
   },
+  // edge view: the wheel's thickness left to right, the outer face on the left
+  pinpos: t => {
+    const k = ping(t, 3), px = 48 + 33 * k;              // pin slides from flush to centered
+    return '<rect x="48" y="56" width="110" height="32" fill="' + C.part + '" stroke="' + C.edge + '"/>' +
+      '<rect x="' + r1(px) + '" y="24" width="44" height="32" fill="var(--pin)" stroke="' + C.edge + '"/>' +
+      '<path d="M48 20 V92" stroke="' + C.hl + '" stroke-width="2" stroke-dasharray="4 3"/>' +
+      label(110, 14, k > 0.5 ? "pins in the middle" : "pins flush with the outer face") + label(48, 106, "outer face");
+  },
   hub: t => {
     let s = '<g transform="rotate(' + r1(t * 25) + ' 110 56)"><circle cx="110" cy="56" r="44" fill="' + C.part + '" stroke="' + C.edge + '"/>';
     for (const a of [45, 135, 225, 315]) { const r = a * Math.PI / 180; s += '<circle cx="' + r1(110 + 22 * Math.cos(r)) + '" cy="' + r1(56 + 22 * Math.sin(r)) + '" r="5" fill="var(--paper)" stroke="' + C.edge + '"/>'; }

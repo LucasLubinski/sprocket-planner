@@ -90,7 +90,7 @@ test("planner UI in headless Chrome", { skip: !chrome && "Chrome not found", tim
     });
 
     await t.test("hovering the pitch circle highlights the Pitch diameter box", async () => {
-      const pos = await ev(`(() => { const el = document.querySelector("#pane-views"); el.scrollTop = document.querySelector("#sec-layout").offsetTop; const c = document.querySelector("svg.layout .pitch").getBoundingClientRect(); return [c.left + 3, c.top + c.height / 2]; })()`);
+      const pos = await ev(`(() => { document.querySelector("svg.layout .pitch").scrollIntoView({ block: "center" }); const c = document.querySelector("svg.layout .pitch").getBoundingClientRect(); return [c.left + 3, c.top + c.height / 2]; })()`);
       await settle();
       // a point on the pitch circle halfway between two pins (pins every 22.5°, first at the top)
       const p2 = await ev(`(() => { const c = document.querySelector("svg.layout .pitch"); const r = c.getBoundingClientRect(); const R = r.width / 2 - 1; const a = (-90 + 11.25 + 7 * 22.5) * Math.PI / 180; return [r.left + r.width / 2 + R * Math.cos(a), r.top + r.height / 2 + R * Math.sin(a)]; })()`);
@@ -103,7 +103,7 @@ test("planner UI in headless Chrome", { skip: !chrome && "Chrome not found", tim
     });
 
     await t.test("hovering a drawing doesn't scroll the input list; clicking it does", async () => {
-      await ev(`(() => { const el = document.querySelector("#pane-views"); el.scrollTop = document.querySelector("#sec-layout").offsetTop; document.querySelector("#pane-inputs").scrollTop = 0; document.scrollingElement.scrollTop = 0; return 1; })()`);
+      await ev(`(() => { document.querySelector("#pane-inputs").scrollTop = 0; document.querySelector("svg.layout .pitch").scrollIntoView({ block: "center" }); return 1; })()`);
       await settle();
       const where = () => ev(`[document.querySelector("#pane-inputs").scrollTop, document.scrollingElement.scrollTop, (() => { const r = document.querySelector('.field[data-field="pitchD"]').getBoundingClientRect(), p = document.querySelector("#pane-inputs").getBoundingClientRect(); return r.top >= p.top && r.bottom <= Math.min(p.bottom, innerHeight); })()]`);
       const before = await where();
@@ -297,6 +297,69 @@ test("planner UI in headless Chrome", { skip: !chrome && "Chrome not found", tim
       assert.ok(r.stripScrolls, "the strip scrolls instead");
       assert.ok(r.activeVisible, "the active tab is scrolled into view");
       assert.ok(r.xw >= 44 && r.xh >= 44, "close button is a 44 px target");
+    });
+
+    await t.test("Center the pins: a student box that moves the pins in the edge drawings and warns about printing", async () => {
+      await fresh(1366, 768);
+      const r = await ev(`(async () => {
+        const cb = document.getElementById("f-pinCenter");
+        const shown = !!cb && cb.getClientRects().length > 0;
+        const pins = () => [...document.querySelectorAll('.d.part.pin[data-key~="pinCenter"]')].map(e => { const b = e.getBBox(); return [b.x, b.y, b.width, b.height].map(n => n.toFixed(2)).join(","); });
+        const before = pins(), warnBefore = document.body.innerText.includes("Pins start above the print bed");
+        cb.focus(); cb.click(); await __t.settle();
+        const after = pins();
+        const warnAfter = document.body.innerText.includes("Pins start above the print bed");
+        const design = __t.sp().store.design.pinCenter;
+        cb.click(); await __t.settle();             // put it back for the tests that follow
+        return { shown, n: before.length, moved: before.some((v, i) => v !== after[i]),
+          warnBefore, warnAfter, design, back: __t.sp().store.design.pinCenter };
+      })()`);
+      assert.ok(r.shown, "the box shows in Student detail");
+      assert.ok(r.n >= 3, "pins in the hub face and track drawings carry the pinCenter key");
+      assert.ok(r.moved, "the pins move");
+      assert.equal(r.design, true);
+      assert.equal(r.back, false, "unchecking puts the pins back");
+      assert.ok(!r.warnBefore && r.warnAfter, "the print warning shows only when centered");
+    });
+
+    await t.test("every number label tied to an input can be typed in place, and the edit reaches the design", async () => {
+      await fresh(1366, 768);
+      const r = await ev(`(async () => {
+        const A = __t.sp(), st = A.store;
+        st.setSettings({ detail: "expert", dimLabels: "all", units: "mm" });
+        st.setField("hub", "custom");
+        await __t.settle(); await __t.settle();
+        const base = JSON.stringify(st.design);
+        const val = k => { const m = A.vm.model; return m.ok && k in m.v && isFinite(m.v[k]) ? m.v[k] : st.design[k]; };
+        const list = [];
+        for (const [id, dr] of Object.entries(A.drawings)) for (const dim of dr.dims || []) if (dim.editable) list.push([id, dim.id, dim.show || dim.key, dim.kind]);
+        const done = [], problems = [];
+        for (const [id, dimId, show, kind] of list) {
+          st.setDesign(JSON.parse(base), "reset"); await __t.settle(); await __t.settle();
+          const dr = A.drawings[id];
+          const label = dr.svg && dr.svg.querySelector('[data-dim-label="' + dimId + '"]');
+          if (!label) continue;                                  // dial and ruler: drag only, no label
+          if (!label.classList.contains("dl-edit")) { problems.push(dimId + ": no click cue"); continue; }
+          label.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          const input = dr.container.querySelector("input.tip-edit");
+          if (!input) { problems.push(dimId + ": no type-in-place box"); continue; }
+          const v = val(show);
+          const nv = kind === "angle" ? v - 2 : kind === "count" ? v + 1 : v === 0 ? 0.5 : Math.round(v * 1.05 * 1000) / 1000;
+          input.value = String(nv);
+          input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+          await __t.settle();
+          const got = val(show);
+          if (!(Math.abs(got - nv) < 5e-4)) problems.push(dimId + ": typed " + nv + ", " + show + " is " + got);
+          else done.push(dimId);
+        }
+        st.setDesign(JSON.parse(base), "reset");
+        return { done, problems };
+      })()`);
+      assert.deepEqual(r.problems, []);
+      // the labels Luke named, plus one from each drawing
+      for (const id of ["cu-p.P", "sheet.holeD", "sheet.guideHoleD", "layout.rotation", "pinhole.gap", "hubface.boltHoleD", "track.trackClearT slotH"])
+        assert.ok(r.done.some(d => d.startsWith(id)), id + " was edited in place");
+      assert.ok(r.done.length >= 35, "edited " + r.done.length + " labels");
     });
 
     // ---------------- making it (phase 5) ----------------

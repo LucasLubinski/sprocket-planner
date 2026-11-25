@@ -24,15 +24,44 @@ test("the page carries the reference model unchanged", () => {
   assert.equal(S.TEMPLATE, REF);
 });
 
-test("default design: the copied file is byte-identical to the reference", () => {
-  assert.equal(S.scadFile(defaultDesign(), "sprocket"), REF);
+test("default design: the copied file is the reference plus the pin_center line", () => {
+  const out = S.scadFile(defaultDesign(), "sprocket");
+  assert.equal(out, S.MODEL);
+  const a = REF.split("\n"), b = out.split("\n");
+  assert.equal(b.length, a.length + 1, "one line added");
+  const flat = a.findIndex(l => l.startsWith("pin_flat ")), z = a.findIndex(l => l.startsWith("pin_z "));
+  assert.equal(b[flat + 1], S.PIN_CENTER_LINE, "pin_center comes right after pin_flat");
+  assert.equal(b[z + 1], S.PIN_Z_LINE, "pin_z reads pin_center");
+  // every other line is the reference, unchanged
+  const rest = b.filter((l, i) => i !== flat + 1 && i !== z + 1), ref = a.filter((l, i) => i !== z);
+  assert.deepEqual(rest, ref);
+  // the new parameter is in the parameter section; pin_z stays under [Hidden]
+  const hidden = b.findIndex(l => l.startsWith("/* [Hidden] */"));
+  assert.ok(flat + 1 < hidden && z + 1 > hidden);
+});
+
+test("withPinCenter refuses a model it doesn't recognize", () => {
+  assert.throws(() => S.withPinCenter(REF.replace(/^pin_z .*$/m, "")));
+  assert.throws(() => S.withPinCenter(REF.replace(/^pin_flat .*$/m, "")));
+});
+
+test("Center the pins: pin_center = true in the copied file", () => {
+  const p = params(S.scadFile(applyField(defaultDesign(), "pinCenter", true), "sprocket"));
+  assert.equal(p.pin_center, "true");
+  assert.equal(params(S.scadFile(defaultDesign(), "sprocket")).pin_center, "false");
+});
+
+test("settings only over an old reference file can't center the pins (known limit)", () => {
+  // the old file has no pin_center line and its pin_z ignores it
+  assert.doesNotMatch(REF, /^pin_center\s*=/m);
+  assert.match(S.scadSettings(defaultDesign(), "sprocket"), /^pin_center = false;/m);
 });
 
 test("every parameter is filled in, with the exact OpenSCAD names", () => {
   let d = defaultDesign();
   for (const [k, v] of [["rotation", 180], ["teeth", 24], ["holeD", 4.6], ["sheetT", 1.6], ["gap", 0.35], ["pinW", 4.25], ["pinH", 3.1],
     ["pinFlat", 0.65], ["drumW", 6], ["hub", "custom"], ["boltSquare", 20], ["boltHoleD", 4.7], ["boltHeadD", 8], ["counterbore", 2],
-    ["centerD", 9], ["pilot", false], ["pilotD", 13.5], ["pilotH", 1], ["guideHoles", 25], ["edgeOffset", 9], ["guideT", 3.5], ["guideHoleD", 4.8]]) {
+    ["centerD", 9], ["pilot", false], ["pinCenter", true], ["pilotD", 13.5], ["pilotH", 1], ["guideHoles", 25], ["edgeOffset", 9], ["guideT", 3.5], ["guideHoleD", 4.8]]) {
     d = applyField(d, k, v);
   }
   d = applyField(d, "travel", 100);
@@ -40,8 +69,9 @@ test("every parameter is filled in, with the exact OpenSCAD names", () => {
   assert.deepEqual(Object.keys(p).sort(), [...ALL].sort());
   assert.equal(p.part, '"drill_guide"');
   assert.equal(p.pilot, "false");
+  assert.equal(p.pin_center, "true");
   for (const [key, name] of Object.entries(SCAD_NAMES)) {
-    if (key === "pilot") continue;
+    if (key === "pilot" || key === "pinCenter") continue;
     assert.ok(Math.abs(parseFloat(p[name]) - d[key]) < 5e-5, name + ": " + p[name] + " vs " + d[key]);
     assert.match(p[name], /^-?\d+(\.\d+)?$/, name + " is a plain decimal");
   }
@@ -49,7 +79,7 @@ test("every parameter is filled in, with the exact OpenSCAD names", () => {
 
 test("only values change: every other line, comment and check stays the same", () => {
   const d = { ...applyField(defaultDesign(), "rotation", 123.456789), pinW: 4.4, counterbore: 1.5 };
-  const a = REF.split("\n"), b = S.scadFile(d, "sprocket").split("\n");
+  const a = S.MODEL.split("\n"), b = S.scadFile(d, "sprocket").split("\n");
   assert.equal(a.length, b.length);
   let changed = 0;
   for (let i = 0; i < a.length; i++) {
@@ -76,10 +106,10 @@ test("settings only: just the parameter block, pasted over gives the same file",
   const block = S.scadSettings(d, "sprocket");
   assert.deepEqual(Object.keys(params(block)).sort(), [...ALL].sort());
   assert.doesNotMatch(block, /\[Hidden\]|module |assert\(/);
-  // paste each line over the matching line of the reference file
+  // paste each line over the matching line of a file copied from the planner
   const set = {};
   for (const l of block.split("\n")) { const m = /^(\w+)\s*=/.exec(l); if (m) set[m[1]] = l; }
-  const pasted = REF.split("\n").map(l => { const m = /^(\w+)\s*=/.exec(l); return m && set[m[1]] && ALL.includes(m[1]) ? set[m[1]] : l; }).join("\n");
+  const pasted = S.MODEL.split("\n").map(l => { const m = /^(\w+)\s*=/.exec(l); return m && set[m[1]] && ALL.includes(m[1]) ? set[m[1]] : l; }).join("\n");
   assert.equal(pasted, S.scadFile(d, "sprocket"));
 });
 

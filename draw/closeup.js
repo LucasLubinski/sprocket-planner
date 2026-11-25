@@ -12,11 +12,17 @@ function view(m) {
   return { x0: -W / 2, x1: W / 2, y0: d.r0 - 2.2, y1: d.yb + p.sheetT + 2.2 };
 }
 
+const PITCH_ID = "cu-p.P";
+
 function build(sk, vm) {
   const m = vm.model;
   if (!m.ok) { sk.text(0, 0, "Fix the red boxes to see the close-up.", { v: "mid", cls: "msg" }); sk.grow(-40, -6); sk.grow(40, 6); return; }
   const p = m.p, d = m.d, v = view(m);
   sk.grow(v.x0, v.y0); sk.grow(v.x1, v.y1);
+  // The hole spacing label is drawn again on every frame (animate, below), so
+  // register its dimension here, once, under the id that label uses. Clicking
+  // the label then finds it and opens type-in-place.
+  sk.dim({ id: PITCH_ID, key: "P", kind: "length", level: "key", editable: true });
   const X0 = Math.min(sk.X(v.x0), sk.X(v.x1)), Wc = Math.abs(sk.X(v.x1) - sk.X(v.x0));
   sk.push('<defs><clipPath id="cu-clip"><rect x="' + n(X0) + '" y="' + n(sk.Y(v.y1)) + '" width="' + n(Wc) + '" height="' + n(v.y1 - v.y0) + '"/></clipPath></defs>');
   sk.open({ "clip-path": "url(#cu-clip)" });
@@ -137,7 +143,8 @@ function animate(svg, vm, theta, sk) {
     const from = Math.min(v.y1, Math.max(d.yb + p.sheetT, d.tipR)) + sub2.px(3);
     const cx = c0 + d.P / 2, lc = clampCenter(cx, labelW(sub2, plabel, pbadge), ln.topFree, v.x1);
     sub2.linear([c0, from], [c0 + d.P, from], [0, ln.topLine - from], {
-      key: "P", level: "key", label: plabel, badge: pbadge, shift: lc - cx
+      key: "P", id: PITCH_ID, level: "key", label: plabel, badge: pbadge, shift: lc - cx,
+      labelCls: vm.canEdit && vm.canEdit("P") ? "dl-edit" : undefined
     });
   }
   const pEl = svg.querySelector("#cu-pitch");

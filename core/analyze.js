@@ -70,6 +70,7 @@ function analyze(p) {
     slotH: p.sheetT + p.trackClearT, slotW: p.sheetW + p.trackClearW,
     rowFromWall: sheet.rowY + p.trackClearW / 2,
     turns: p.rotation / 360, slab: p.pinFlat * p.pinW,
+    pinZ: p.pinCenter ? p.drumW / 2 : p.pinFlat * p.pinW / 2,
     taperGeo: geoTaper.ok ? geoTaper.deg : NaN,
     guideBoxL: (d.nGuide - 1) * d.P + 12, guideBoxW: p.edgeOffset + p.holeD / 2 + 6 + 4,
     guideBoxH: p.guideT + p.sheetT * 0.8
@@ -134,6 +135,10 @@ function analyze(p) {
     "Less than 1 mm of plastic is left under the screw heads. Make the counterbore shallower.");
   if (!(v.slab < p.drumW)) add("hubFlat", "stop", "Pins thicker than the wheel",
     "Flattened pins (" + f(v.slab, 2) + " mm) must be thinner than the wheel (" + f(p.drumW, 2) + " mm).");
+  // centered pins start above the print bed (outer face down), so their flat underside overhangs
+  const lift = v.pinZ - v.slab / 2;
+  if (p.pinCenter && v.slab < p.drumW && lift > 0.05) add("pinLift", "warn", "Pins start above the print bed",
+    "Centered pins start " + f(lift, 1) + " mm above the bed. Turn on supports, or turn off Center the pins.");
   if (d.screwL === undefined) add("hubScrew", "stop", "No screw long enough",
     "No standard M4 screw is long enough. Make the wheel thinner or add a counterbore.");
   if (p.counterbore > 0 && !(p.boltHeadD > p.boltHoleD)) add("hubHead", "warn", "Screw head room too small",

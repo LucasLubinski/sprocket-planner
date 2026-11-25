@@ -70,6 +70,17 @@ function start() {
     warn: h("p.status-bar-field.st-warn")
   };
   $("#statusbar").append(status.msg, status.turn, status.warn);
+
+  // The window's top block and status bar stick to the screen on wide screens
+  // (styles/win98.css). The inputs list sizes itself between them, so it needs
+  // their heights, which change when the toolbar wraps or the tab note shows.
+  const headEl = $("#winhead"), footEl = $("#statusbar");
+  const setChromeHeights = () => {
+    document.documentElement.style.setProperty("--head-h", headEl.offsetHeight + "px");
+    document.documentElement.style.setProperty("--foot-h", footEl.offsetHeight + "px");
+  };
+  setChromeHeights();
+  if (typeof ResizeObserver === "function") { const ro = new ResizeObserver(setChromeHeights); ro.observe(headEl); ro.observe(footEl); }
   const icon = $("link[rel=icon]");
   if (icon) icon.href = dataUri("app");
   $(".app-icon").innerHTML = svgIcon("app", 16);
@@ -128,7 +139,7 @@ function start() {
     }
     if (dr && !(store.route && store.route.key === dr.key)) app.dragRoute = null;
   }
-  app.vmHooks = { onAnimated: el => highlighter.refresh(el) };
+  app.vmHooks = { onAnimated: el => highlighter.refresh(el), canEdit: key => handles.canEdit(key) };
 
   // ---------- render ----------
   let queued = false;

@@ -197,10 +197,11 @@ function createInputs(pane, { store, getVM, highlighter, onExplain, onStatus, ex
 
   function checkField(f) {
     const cb = h("input", { type: "checkbox", id: "f-" + f.key });
-    const row = h("div.field.check.lvl-expert", { "data-field": f.key, "data-hl": f.key },
+    const row = h("div.field.check", { "data-field": f.key, "data-hl": f.key },
       h("div.f-row", cb, h("label", { for: "f-" + f.key }, h("span.f-name", f.name), " ", h("span.f-term", "(" + f.term + ")")),
         h("button.qmark", { type: "button", "aria-label": "What is " + f.name + "?", "data-explain": f.key, text: "?" })),
       h("div.f-hint", f.hint));
+    if (levelOf(f.key) === "expert") row.classList.add("lvl-expert");
     cb.addEventListener("focus", () => { store.beginEdit(f.key); highlighter.setFocus(f.key); });
     cb.addEventListener("blur", () => highlighter.clearFocus(f.key));
     cb.addEventListener("change", () => {

@@ -100,6 +100,10 @@ const FIELDS = [
     hint: "Pins are trimmed flat so they print without supports.",
     callout: "Pin flattening: pins are trimmed flat to print without supports.",
     explain: { anim: "flat", text: ["Round pins would need supports to print.", "Trimming them flat top and bottom fixes that."] } },
+  { key: "pinCenter", group: "pins", type: "check", name: "Center the pins", term: "pin_center",
+    hint: "Off: pins sit flush with the outer face. On: they sit in the middle of the wheel.",
+    callout: "Center the pins: where the pins sit across the wheel's thickness.",
+    explain: { anim: "pinpos", text: ["Off, the pins line up with the outer face.", "They print flat on the bed with no supports.", "On, they sit in the middle of the wheel.", "Then they may need supports to print."] } },
 
   // ---- hub mount ----
   { key: "hub", group: "hub", type: "hub", name: "Hub", term: "preset",
@@ -217,6 +221,7 @@ const METRICS = {
   pinStraight: { name: "Straight part", term: "straight section", unit: "mm", dp: 2 },
   straightPast: { name: "Straight past the sheet", term: "extra straight", unit: "mm", dp: 2 },
   pinFlat: { name: "Pin flattening", term: "pin_flat", unit: "× width", dp: 2 },
+  pinZ: { name: "Pin center from the outer face", term: "pin_z", unit: "mm", dp: 2, level: "expert" },
   drumW: { name: "Sprocket thickness", term: "drum_w", unit: "mm", dp: 2 },
   boltSquare: { name: "Bolt pattern", term: "bolt square", unit: "mm", dp: 2 },
   boltHoleD: { name: "Bolt hole size", term: "bolt_hole_d", unit: "mm", dp: 2 },
@@ -274,7 +279,7 @@ const MEASURE_ROWS = [
   { title: "Wheel", keys: ["pitchD", "drumD", "overD", "yb", "pinGapOnDrum"] },
   { title: "Sheet and holes", keys: ["P", "web", "holes", "run", "win", "inSheet"] },
   { title: "Fit", keys: ["wUnder", "play", "tight", "tightAt", "loPlay", "loTight", "hiPlay", "hiTight"] },
-  { title: "Hub", keys: ["hubMinD", "hubRoom", "boltR", "screwL", "slab"] },
+  { title: "Hub", keys: ["hubMinD", "hubRoom", "boltR", "screwL", "slab", "pinZ"] },
   { title: "Drill guide and sheet file", keys: ["nGuide", "guideLen", "sheetLen", "sheetW", "rowOffset"] },
   { title: "Track", keys: ["slotH", "slotW", "rowFromWall"] }
 ];

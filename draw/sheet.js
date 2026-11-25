@@ -28,7 +28,7 @@ function build(sk, vm) {
       editable: true, value: d.P, drag: { type: "axis", origin: [h0.x, 0], axis: [1, 0], factor: 1 }, handle: [h1.x, W + sk.px(12)], step: 0.1, bigStep: 1
     });
   }
-  sk.leader([h0.x - h * 0.7, h0.y + h * 0.7], [h0.x - h - sk.px(10), W + lane * 1.6], { key: "holeD", level: "key", label: "hole Ø" + vm.num("holeD"), badge: vm.badge("holeD") });
+  sk.leader([h0.x - h * 0.7, h0.y + h * 0.7], [h0.x - h - sk.px(10), W + lane * 1.6], { key: "holeD", level: "key", editable: true, label: "hole Ø" + vm.num("holeD"), badge: vm.badge("holeD") });
   sk.linear([0, 0], [L, 0], [0, -sk.px(14)], {
     key: "sheetLen", level: "key", label: vm.word("sheet length ", "length ") + vm.num("sheetLen") + (p.sheetLen == null ? vm.word(" (auto)", " (auto)") : ""), badge: vm.badge("sheetLen"),
     editable: true, value: L, drag: { type: "axis", origin: [0, 0], axis: [1, 0], factor: 1 }, handle: [L, -sk.px(14)], step: 1, bigStep: 10
@@ -41,7 +41,7 @@ function build(sk, vm) {
     key: "rowOffset", level: "all", label: vm.word("row ", "row ") + vm.num("rowOffset"), badge: vm.badge("rowOffset"), rot: true,
     editable: true, value: s.rowY, drag: { type: "axis", origin: [0, 0], axis: [0, 1], factor: 1 }, handle: [-sk.px(14), s.rowY], step: 0.5, bigStep: 2
   });
-  if (s.endGap > sk.px(30)) sk.linear([0, s.rowY], [h0.x - h, s.rowY], [0, -h - sk.px(8)], { key: "endMargin", level: "all", label: vm.word("end ", "end ") + vm.fmt("endMargin", s.endGap), badge: null, ext: false });
+  if (s.endGap > sk.px(30)) sk.linear([0, s.rowY], [h0.x - h, s.rowY], [0, -h - sk.px(8)], { key: "endMargin", level: "all", editable: true, label: vm.word("end ", "end ") + vm.fmt("endMargin", s.endGap), badge: null, ext: false });
   sk.text(L / 2, W / 2 + h + sk.px(6), s.n + " holes", { v: "bottom", cls: "note", px: 13 });
 
   // drill guide, same scale, below
@@ -59,9 +59,12 @@ function guide(sk, vm, oy) {
   sk.rect(0, Y(0), len, Y(width), "d part guide", { "data-key": "guideT guideHoles" });
   sk.rect(0, Y(-fence), len, Y(0), "d part fence", { "data-key": "edgeOffset" });
   for (let k = 0; k < n; k++) sk.circle(margin + k * d.P, Y(p.edgeOffset), p.guideHoleD / 2, "d part hole-o", { "data-key": "guideHoleD guideHoles" });
-  sk.linear([0, Y(-fence)], [len, Y(-fence)], [0, -sk.px(12)], { key: "guideHoles", level: "key", label: n + " holes, " + vm.fmt("guideLen", d.guideLen) + " long · " + vm.num("guideT") + " thick", badge: vm.badge("nGuide") });
-  sk.linear([len, Y(0)], [len, Y(p.edgeOffset)], [sk.px(14), 0], { key: "edgeOffset", level: "all", label: vm.word("edge to holes ", "edge offset ") + vm.num("edgeOffset"), badge: vm.badge("edgeOffset"), rot: true });
-  sk.leader([margin + d.P + p.guideHoleD / 2 * 0.7, Y(p.edgeOffset + p.guideHoleD / 2 * 0.7)], [margin + d.P * 2.2, Y(width) + sk.fs * 1.4], { key: "guideHoleD", level: "all", label: vm.word("guide hole Ø", "guide hole Ø") + vm.num("guideHoleD"), badge: vm.badge("guideHoleD") });
+  sk.linear([0, Y(-fence)], [len, Y(-fence)], [0, -sk.px(12)], { key: "guideHoles", level: "key", editable: true, kind: "count", show: "nGuide", set: { key: "guideHoles", from: v => Math.max(0, Math.round(v)) }, label: n + " holes, " + vm.fmt("guideLen", d.guideLen) + " long", badge: vm.badge("nGuide") });
+  // thickness can't be drawn in a top view, so it gets a leader of its own:
+  // from the plate's right end down to its own row under the length label
+  sk.leader([len - margin, Y(1)], [len - margin - sk.px(14), Y(-fence) - sk.px(12) - sk.fs * 2.2], { key: "guideT", level: "key", kind: "length", editable: true, label: vm.word("guide ", "guide_t ") + vm.num("guideT") + " thick", badge: vm.badge("guideT") });
+  sk.linear([len, Y(0)], [len, Y(p.edgeOffset)], [sk.px(14), 0], { key: "edgeOffset", level: "all", editable: true, label: vm.word("edge to holes ", "edge offset ") + vm.num("edgeOffset"), badge: vm.badge("edgeOffset"), rot: true });
+  sk.leader([margin + d.P + p.guideHoleD / 2 * 0.7, Y(p.edgeOffset + p.guideHoleD / 2 * 0.7)], [margin + d.P * 2.2, Y(width) + sk.fs * 1.4], { key: "guideHoleD", level: "all", editable: true, label: vm.word("guide hole Ø", "guide hole Ø") + vm.num("guideHoleD"), badge: vm.badge("guideHoleD") });
 }
 
 module.exports = { id: "sheet", build, fitOpts: () => ({ maxHeightPx: 560 }) };

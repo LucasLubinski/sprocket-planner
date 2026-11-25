@@ -101,7 +101,7 @@ function build(sk, vm) {
   // turn arrow under the wheel
   {
     const r = d.tipR + sk.px(8);
-    const dd = sk.dim({ kind: "angle", key: "rotation", level: "key", c: [0, 0], r, editable: false });
+    const dd = sk.dim({ kind: "angle", key: "rotation", level: "key", c: [0, 0], r, editable: true });
     sk.open(sk.groupFor(dd));
     sk.arc(0, 0, r, 292, 248, "dl turnarc", { noGrow: false });
     sk.arrow(r * Math.cos(248 * D2R), r * Math.sin(248 * D2R), 248 - 90, "arw", 9);
@@ -118,7 +118,8 @@ function build(sk, vm) {
 
   // shaft to sheet underside
   sk.line(0, 0, -d.tipR, 0, "cline", { noGrow: true });
-  sk.linear([-d.tipR, 0], [-d.tipR, d.yb], [-sk.px(16), 0], { key: "yb", level: "all", label: vm.word("shaft to sheet", "axis to sheet") + " " + vm.num("yb"), badge: vm.badge("yb") });
+  sk.linear([-d.tipR, 0], [-d.tipR, d.yb], [-sk.px(16), 0], { key: "yb", level: "all", label: vm.word("shaft to sheet", "axis to sheet") + " " + vm.num("yb"), badge: vm.badge("yb"),
+    editable: true, show: "yb", set: { key: "pitchD", from: (v, p) => 2 * v + p.sheetT } });
 
   // full travel and distance moved so far
   const travelLabel = vm.word("slides", "travel") + " " + vm.num("travel") + " mm (" + vm.num("travelIn") + " in)";

@@ -10,6 +10,11 @@ const F = require("../core/format.js");
 const NS = "http://www.w3.org/2000/svg";
 const D2R = Math.PI / 180;
 
+// The number a label shows (dim.show) and the input it changes (dim.set.key).
+// Both default to the dimension's own key.
+const showKeyOf = dim => dim.show || dim.key;
+const setKeyOf = dim => (dim.set && dim.set.key) || dim.key;
+
 function svgEl(tag, attrs) {
   const el = document.createElementNS(NS, tag);
   for (const [k, v] of Object.entries(attrs || {})) if (v !== undefined && v !== null) el.setAttribute(k, String(v));
@@ -40,10 +45,13 @@ function createHandles({ store, getVM, setStatus, onRoute }) {
     else if (dim.kind !== "angle" && dim.key !== "rotation") s = Math.max(step, s); // lengths stay above 0
     return s;
   };
+  // v is the number the label shows. Most labels show their own input; some
+  // show a result tied to one input (slot height = sheet + track clearance),
+  // and dim.set says which input to change and how.
   function apply(dim, v) {
-    const key = dim.key;
-    if (Math.abs(v - current(key)) < 1e-9) return false;
-    const ok = store.setField(key, v);
+    if (Math.abs(v - current(showKeyOf(dim))) < 1e-9) return false;
+    const key = setKeyOf(dim);
+    const ok = store.setField(key, dim.set && dim.set.from ? dim.set.from(v, store.design) : v);
     if (onRoute) onRoute(key, dim.drawing);
     return ok;
   }
@@ -56,14 +64,16 @@ function createHandles({ store, getVM, setStatus, onRoute }) {
     const layer = svgEl("g", { class: "handles" });
     const rVis = 6 / sk.s, rHit = 22 / sk.s;
     for (const dim of drawing.dims) {
-      if (!dim.editable || !dim.handle || !dim.drag) continue;
-      const key = dim.key;
+      if (!dim.editable) continue;
+      const key = setKeyOf(dim);
       // only when its dimension is showing (detail level and label setting)
       const grp = svg.querySelector('[data-dim="' + dim.id + '"]');
       if (grp && !grp.checkVisibility()) continue;
       const label = grp && grp.querySelector("[data-dim-label]");
       if (!canEdit(key)) { if (label) label.classList.remove("dl-edit"); continue; }
-      if (label) { label.classList.add("dl-edit"); label.setAttribute("aria-label", "Change " + nameOf(key) + ": " + label.textContent); }
+      // every editable label takes type-in-place; only some also get a drag handle
+      if (label) { label.classList.add("dl-edit"); label.setAttribute("aria-label", "Change " + nameOf(showKeyOf(dim)) + ": " + label.textContent); }
+      if (!dim.handle || !dim.drag) continue;
       const [hx, hy] = dim.handle;
       const g = svgEl("g", {
         class: "dhandle", "data-key": key, "data-dim-handle": dim.id, tabindex: "0", role: "slider",
@@ -144,24 +154,29 @@ function createHandles({ store, getVM, setStatus, onRoute }) {
   function editLabel(drawing, label) {
     const id = label.getAttribute("data-dim-label");
     const dim = (drawing.dims || []).find(x => x.id === id);
-    if (!dim || !dim.editable || !dim.drag) return false;
-    if (!canEdit(dim.key)) { setStatus(nameOf(dim.key) + (store.locks.includes(dim.key) ? " is locked." : " is held by the locks.") + " Unlock it to change it."); return true; }
+    if (!dim || !dim.editable) return false;
+    const key = setKeyOf(dim), show = showKeyOf(dim);
+    if (!canEdit(key)) {
+      if (isLocked(store.design, key)) setStatus("Set Hub to Custom to change the hub settings.");
+      else setStatus(nameOf(key) + (store.locks.includes(key) ? " is locked." : " is held by the locks.") + " Unlock it to change it.");
+      return true;
+    }
     closeEditor();
-    const inch = dim.key === "travel" && store.settings.units === "in";
+    const inch = show === "travel" && store.settings.units === "in";
     const box = drawing.container;
     const r = label.getBoundingClientRect(), b = box.getBoundingClientRect();
     const input = document.createElement("input");
     input.type = "text"; input.className = "tip-edit"; input.inputMode = "decimal";
-    input.setAttribute("aria-label", "New " + nameOf(dim.key) + (inch ? " in inches" : dim.kind === "angle" ? " in degrees" : " in mm") + ". Enter applies, Escape cancels.");
-    const v = current(dim.key);
+    input.setAttribute("aria-label", "New " + nameOf(show) + (inch ? " in inches" : dim.kind === "angle" ? " in degrees" : dim.kind === "count" ? "" : " in mm") + ". Enter applies, Escape cancels.");
+    const v = current(show);
     input.value = F.trim(inch ? v / 25.4 : v, 4);
     input.style.left = Math.max(0, r.left - b.left + box.scrollLeft) + "px";
     input.style.top = Math.max(0, r.top - b.top + box.scrollTop - 4) + "px";
     input.style.width = Math.max(90, r.width + 16) + "px";
     box.appendChild(input);
-    editor = { input, drawing, key: dim.key };
+    editor = { input, drawing, key };
     input.focus(); input.select();
-    store.beginEdit("inplace:" + dim.key);
+    store.beginEdit("inplace:" + key);
     input.addEventListener("keydown", ev => {
       if (ev.key === "Enter") {
         ev.preventDefault();
@@ -184,7 +199,7 @@ function createHandles({ store, getVM, setStatus, onRoute }) {
     });
   }
 
-  return { decorate, attach, editLabel, get dragging() { return dragging; }, get editor() { return editor; } };
+  return { decorate, attach, editLabel, canEdit, get dragging() { return dragging; }, get editor() { return editor; } };
 }
 
 module.exports = { createHandles };

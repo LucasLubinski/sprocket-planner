@@ -76,7 +76,7 @@ function build(sk, vm) {
   for (const L1 of labels) { L1.y = Math.min(L1.from[1], prev - gapY); prev = L1.y; }
   const lowest = labels.length ? labels[labels.length - 1].y - sk.fs * 0.6 : -R;
   for (const L1 of labels) {
-    sk.leader(L1.from, [colX, L1.y], { key: L1.key, level: L1.level, label: L1.text, badge: vm.badge(L1.key) });
+    sk.leader(L1.from, [colX, L1.y], { key: L1.key, level: L1.level, label: L1.text, badge: vm.badge(L1.key), editable: L1.key !== "hub" && L1.key !== "hubMinD" });
   }
 
   edgeView(sk, vm, Math.min(-R, lowest) - sk.px(26) - sk.fs * 2.9);
@@ -88,30 +88,30 @@ function edgeView(sk, vm, top) {
   const hz = p.drumW + (p.pilot ? p.pilotH : 0);
   const z0 = top - hz;
   const Z = z => z0 + z;
-  const r0 = d.r0, br = d.boltR, slab = p.pinFlat * p.pinW;
+  const r0 = d.r0, br = d.boltR, slab = m.v.slab, pz = m.v.pinZ;  // pz: pin center above the outer face
   // rows above the part: the title, then the pilot ring label
   const pilotRow = Z(hz) + sk.px(8);
   sk.text(0, pilotRow + sk.fs * 1.3, vm.word("Cut through two bolt holes (hub side up)", "Section through the bolt holes (hub side up)"), { v: "bottom", cls: "note", px: 13 });
   sk.rect(-r0, Z(0), r0, Z(p.drumW), "d part drum", { "data-key": "drumW drumD" });
-  for (const sx of [-1, 1]) sk.rect(sx * r0, Z(0), sx * (r0 + p.pinH), Z(slab), "d part pin", { "data-key": "pinFlat pinH pinW" });
+  for (const sx of [-1, 1]) sk.rect(sx * r0, Z(pz - slab / 2), sx * (r0 + p.pinH), Z(pz + slab / 2), "d part pin", { "data-key": "pinFlat pinH pinW pinCenter" });
   if (p.pilot) sk.rect(-p.pilotD / 2, Z(p.drumW), p.pilotD / 2, Z(p.drumW + p.pilotH), "d part pilot-e", { "data-key": "pilotH pilotD pilot" });
   if (p.centerD > 0) sk.rect(-p.centerD / 2, Z(-0.01), p.centerD / 2, Z(hz + 0.01), "d part cut", { "data-key": "centerD" });
   for (const sx of [-1, 1]) {
     sk.rect(sx * br - p.boltHoleD / 2, Z(-0.01), sx * br + p.boltHoleD / 2, Z(p.drumW + 0.01), "d part cut", { "data-key": "boltHoleD boltSquare" });
     if (p.counterbore > 0) sk.rect(sx * br - p.boltHeadD / 2, Z(-0.01), sx * br + p.boltHeadD / 2, Z(Math.min(p.counterbore, p.drumW)), "d part cut", { "data-key": "counterbore boltHeadD" });
   }
-  sk.linear([-r0 - p.pinH, Z(0)], [-r0 - p.pinH, Z(p.drumW)], [-sk.px(12), 0], { key: "drumW", level: "key", label: vm.word("thickness ", "drum_w ") + vm.num("drumW"), badge: vm.badge("drumW"), anchor: "end" });
+  sk.linear([-r0 - p.pinH, Z(0)], [-r0 - p.pinH, Z(p.drumW)], [-sk.px(12), 0], { key: "drumW", level: "key", editable: true, label: vm.word("thickness ", "drum_w ") + vm.num("drumW"), badge: vm.badge("drumW"), anchor: "end" });
   // pin thickness label: beside the pin, but never up in the pilot row
-  const pinY = Math.min(Z(slab / 2), pilotRow - sk.fs * 1.25);
-  sk.linear([r0 + p.pinH, Z(0)], [r0 + p.pinH, Z(slab)], [sk.px(12), 0], { key: "pinFlat", level: "all", label: "pin " + vm.fmt("slab", slab) + " thick (" + vm.num("pinFlat") + " × width)", badge: vm.badge("slab"), anchor: "start", dy: pinY - Z(slab / 2) });
+  const pinY = Math.min(Z(pz), pilotRow - sk.fs * 1.25);
+  sk.linear([r0 + p.pinH, Z(pz - slab / 2)], [r0 + p.pinH, Z(pz + slab / 2)], [sk.px(12), 0], { key: "pinFlat", level: "all", editable: true, show: "slab", set: { key: "pinFlat", from: (v, q) => v / q.pinW }, label: "pin " + vm.fmt("slab", slab) + " thick (" + vm.num("pinFlat") + " × width)", badge: vm.badge("slab"), anchor: "start", dy: pinY - Z(pz) });
   if (p.pilot) {
-    const dd = sk.dim({ key: "pilotH", level: "all", kind: "length" });
+    const dd = sk.dim({ key: "pilotH", level: "all", kind: "length", editable: true });
     sk.open(sk.groupFor(dd));
     sk.line(p.pilotD / 2, Z(p.drumW + p.pilotH), r0 + p.pinH + sk.px(10), pilotRow, "dl");
     dd.labelBox = sk.text(r0 + p.pinH + sk.px(13), pilotRow, vm.word("pilot ring ", "pilot ") + vm.num("pilotH") + " tall", { anchor: "start", v: "mid", badge: vm.badge("pilotH"), a: { "data-dim-label": dd.id } });
     sk.close();
   }
-  const dd = sk.dim({ key: "counterbore", level: "key", kind: "length" });
+  const dd = sk.dim({ key: "counterbore", level: "key", kind: "length", editable: true });
   sk.open(sk.groupFor(dd));
   // under the part, and under the side labels that hang below it
   const cbY = Math.min(Z(0) - sk.px(6), Z(p.drumW / 2) - sk.fs * 0.75 - sk.px(4), pinY - sk.fs * 0.75 - sk.px(4));

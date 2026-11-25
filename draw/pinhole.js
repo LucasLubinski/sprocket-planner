@@ -64,8 +64,8 @@ function build(sk, vm) {
   // right column: gap, sheet, slant, tip
   const rx = X + sk.px(12);
   const rowH = sk.fs * 1.35;
-  sk.linear([X, 0], [X, g], [rx - X, 0], { key: "gap", level: "all", label: "gap " + vm.num("gap"), badge: vm.badge("gap"), anchor: "start", dy: -Math.max(0, rowH - g) / 2 });
-  sk.linear([X, g], [X, g + t], [rx - X, 0], { key: "sheetT", level: "key", label: "sheet " + vm.num("sheetT"), badge: vm.badge("sheetT"), anchor: "start", dy: Math.max(0, rowH - t) / 2 });
+  sk.linear([X, 0], [X, g], [rx - X, 0], { key: "gap", level: "all", editable: true, label: "gap " + vm.num("gap"), badge: vm.badge("gap"), anchor: "start", dy: -Math.max(0, rowH - g) / 2 });
+  sk.linear([X, g], [X, g + t], [rx - X, 0], { key: "sheetT", level: "key", editable: true, label: "sheet " + vm.num("sheetT"), badge: vm.badge("sheetT"), anchor: "start", dy: Math.max(0, rowH - t) / 2 });
 
   // taper angle at the top of the straight part, right side, with a leader
   const slantY = Math.max(g + t + rowH * 0.9, s + 0.6);
@@ -96,7 +96,7 @@ function build(sk, vm) {
   const tipY = slantY + rowH;
   if (p.tipD > 0) {
     const b = p.tipD / 2, c = H - b, ang = 40 * D2R;
-    const dd = sk.dim({ kind: "diameter", key: "tipD", level: "all" });
+    const dd = sk.dim({ kind: "diameter", key: "tipD", level: "all", editable: true });
     sk.open(sk.groupFor(dd));
     const from = [b * Math.cos(ang), c + b * Math.sin(ang)];
     sk.line(from[0], from[1], rx - sk.px(3), tipY, "dl");
@@ -104,7 +104,7 @@ function build(sk, vm) {
     dd.labelBox = sk.text(rx, tipY, "tip Ø" + vm.num("tipD"), { anchor: "start", v: "mid", badge: vm.badge("tipD"), a: { "data-dim-label": dd.id } });
     sk.close();
   } else {
-    const dd = sk.dim({ key: "tipD", level: "key", kind: "diameter" });
+    const dd = sk.dim({ key: "tipD", level: "key", kind: "diameter", editable: true });
     sk.open(sk.groupFor(dd));
     sk.text(rx, tipY, vm.word("pointed tip!", "pointed tip ") + (vm.settings.detail === "expert" ? vm.num("tipD") : ""), { anchor: "start", v: "mid", cls: "bad-t", a: { "data-dim-label": dd.id } });
     sk.close();
@@ -117,9 +117,9 @@ function build(sk, vm) {
     editable: true, value: H, drag: { type: "axis", origin: [0, 0], axis: [0, 1], factor: 1 }, handle: [lx2, H], step: 0.1, bigStep: 0.5
   });
   if (s > 0) {
-    sk.linear([-a, 0], [-a, s], [lx1 + a, 0], { key: "pinStraight", level: "all", rot: true, label: "straight " + vm.num("pinStraight"), badge: vm.badge("pinStraight") });
+    sk.linear([-a, 0], [-a, s], [lx1 + a, 0], { key: "pinStraight", level: "all", editable: true, rot: true, label: "straight " + vm.num("pinStraight"), badge: vm.badge("pinStraight") });
   } else {
-    const dd = sk.dim({ key: "pinStraight", level: "all", kind: "length" });
+    const dd = sk.dim({ key: "pinStraight", level: "all", kind: "length", editable: true });
     sk.open(sk.groupFor(dd));
     sk.text(-X, base - sk.px(4), "straight part 0", { anchor: "start", v: "top", badge: vm.badge("pinStraight"), a: { "data-dim-label": dd.id } });
     sk.close();

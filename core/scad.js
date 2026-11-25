@@ -6,6 +6,26 @@
 const TEMPLATE = require("./scad-template.js");
 const { SCAD_NAMES } = require("./params.js");
 
+// The reference model always puts the pins flush with the outer face
+// (pin_z = slab_h / 2). The planner adds one setting, pin_center, so the
+// copied file can put them in the middle of the drum instead. The reference
+// file itself stays unchanged; only the copy gets these two lines.
+//   1. A new parameter line, just after the pin_flat line (in [Pins]).
+//   2. The pin_z line (under [Hidden]) replaced so it reads pin_center.
+const PIN_CENTER_LINE = "pin_center = false;           // true = pins in the middle of drum_w, false = flush with the outer face (prints without supports)";
+const PIN_Z_LINE = "pin_z    = pin_center ? drum_w / 2 : slab_h / 2;   // pin centreline above the bed face";
+
+function withPinCenter(template) {
+  const lines = template.split("\n");
+  const flat = lines.findIndex(l => l.startsWith("pin_flat "));
+  const z = lines.findIndex(l => l.startsWith("pin_z "));
+  if (flat < 0 || z < 0) throw new Error("polycarb_sprocket.scad has no " + (flat < 0 ? "pin_flat" : "pin_z") + " line: can't add pin_center");
+  lines[z] = PIN_Z_LINE;                       // replace first: the insert below moves later lines down
+  lines.splice(flat + 1, 0, PIN_CENTER_LINE);
+  return lines.join("\n");
+}
+const MODEL = withPinCenter(TEMPLATE);
+
 // Plain decimal, up to 4 places, never an exponent.
 function scadNum(v) {
   let s = (Math.round(v * 1e4) / 1e4).toFixed(4).replace(/\.?0+$/, "");
@@ -46,14 +66,14 @@ function sectionRange(lines) {
   return [a, b];
 }
 
-function scadFile(design, part, template = TEMPLATE) {
+function scadFile(design, part, template = MODEL) {
   const values = scadValues(design, part);
   const lines = template.split("\n");
   const [a, b] = sectionRange(lines);
   return lines.map((l, i) => (i >= a && i < b) ? fillLine(l, values) : l).join("\n");
 }
 
-function scadSettings(design, part, template = TEMPLATE) {
+function scadSettings(design, part, template = MODEL) {
   const lines = scadFile(design, part, template).split("\n");
   const [a, b] = sectionRange(lines);
   const body = lines.slice(a, b);
@@ -62,4 +82,4 @@ function scadSettings(design, part, template = TEMPLATE) {
     .concat(body).join("\n") + "\n";
 }
 
-module.exports = { scadNum, scadValues, fillLine, scadFile, scadSettings, TEMPLATE };
+module.exports = { scadNum, scadValues, fillLine, scadFile, scadSettings, withPinCenter, TEMPLATE, MODEL, PIN_CENTER_LINE, PIN_Z_LINE };

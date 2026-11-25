@@ -13,7 +13,7 @@ const HUB_KEYS = Object.keys(GOBILDA_HUB);
 const SCAD_NAMES = Object.freeze({
   rotation: "rotation_deg", travel: "travel",
   holeD: "hole_d", sheetT: "sheet_t", teeth: "teeth",
-  pinW: "pin_d", pinStraight: "pin_straight", tipD: "pin_tip_d", pinH: "pin_h", gap: "sheet_gap", pinFlat: "pin_flat",
+  pinW: "pin_d", pinStraight: "pin_straight", tipD: "pin_tip_d", pinH: "pin_h", gap: "sheet_gap", pinFlat: "pin_flat", pinCenter: "pin_center",
   drumW: "drum_w",
   boltSquare: "bolt_square", boltHoleD: "bolt_hole_d", boltHeadD: "bolt_head_d", counterbore: "counterbore",
   centerD: "center_d", pilot: "pilot", pilotD: "pilot_d", pilotH: "pilot_h",
@@ -26,7 +26,7 @@ const BASE = {
   // sheet
   holeD: 4.5, sheetT: 1.5, gap: 0.4,
   // pins
-  pinW: 4.0, pinStraight: 0, pinH: 2.6, tipD: 2.0, pinFlat: 0.7, shape: "tapered",
+  pinW: 4.0, pinStraight: 0, pinH: 2.6, tipD: 2.0, pinFlat: 0.7, pinCenter: false, shape: "tapered",
   straightPast: 0,             // Straight shape: the straight part runs this far past the sheet top
   // body and hub
   drumW: 5, hub: "gobilda", ...GOBILDA_HUB,
@@ -51,7 +51,7 @@ function normalizeDesign(d) {
     const v = d[k], def = out[k];
     if (k === "shape") { if (["tapered", "straight", "custom"].includes(v)) out.shape = v; continue; }
     if (k === "hub") { if (v === "gobilda" || v === "custom") out.hub = v; continue; }
-    if (k === "pilot") { out.pilot = v === true || v === "true"; continue; }
+    if (k === "pilot" || k === "pinCenter") { out[k] = v === true || v === "true"; continue; }
     if (def === null || typeof def === "number") {
       if (v === null && def === null) { out[k] = null; continue; }
       const n = typeof v === "number" ? v : parseFloat(v);

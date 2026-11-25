@@ -166,13 +166,13 @@ class Sketch {
     let t;
     if (vertical && spec.rot) {
       // label runs along the line, reading bottom to top
-      t = this.text(mx + nx * (this.px(5) + this.fs * 0.45), my, spec.label, { rot: -90, badge: spec.badge, a: { "data-dim-label": d.id } });
+      t = this.text(mx + nx * (this.px(5) + this.fs * 0.45), my, spec.label, { rot: -90, badge: spec.badge, cls: spec.labelCls, a: { "data-dim-label": d.id } });
     } else if (vertical) {
       const side = (nx * this.dir) >= 0 ? "start" : "end";
-      t = this.text(mx + nx * this.px(6), my + (spec.dy || 0), spec.label, { anchor: spec.anchor || side, v: "mid", badge: spec.badge, a: { "data-dim-label": d.id } });
+      t = this.text(mx + nx * this.px(6), my + (spec.dy || 0), spec.label, { anchor: spec.anchor || side, v: "mid", badge: spec.badge, cls: spec.labelCls, a: { "data-dim-label": d.id } });
     } else {
       const above = ny >= 0;
-      t = this.text(mx + nx * this.px(5), my + ny * this.px(5), spec.label, { anchor: spec.anchor || "middle", v: above ? "bottom" : "top", badge: spec.badge, a: { "data-dim-label": d.id } });
+      t = this.text(mx + nx * this.px(5), my + ny * this.px(5), spec.label, { anchor: spec.anchor || "middle", v: above ? "bottom" : "top", badge: spec.badge, cls: spec.labelCls, a: { "data-dim-label": d.id } });
     }
     this.close();
     d.labelBox = t;

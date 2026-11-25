@@ -16,7 +16,7 @@ function createTooltip(layer) {
       const r = el.getBoundingClientRect();
       const tw = tip.offsetWidth;
       tip.style.left = Math.max(4, Math.min(window.innerWidth - tw - 4, r.left + r.width / 2 - tw / 2)) + "px";
-      tip.style.top = (r.bottom + 6 + window.scrollY) + "px";
+      tip.style.top = (r.bottom + 6) + "px";   // fixed: stays under its button while the page scrolls
       el.setAttribute("aria-describedby", "tooltip");
     }, 450);
   }

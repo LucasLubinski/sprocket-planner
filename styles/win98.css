@@ -72,7 +72,9 @@ a { color: #0000ee; }
 
 /* ---- desktop and window ---- */
 .desktop { min-height: 100vh; padding: 10px; }
-.app-window { max-width: 1640px; margin: 0 auto; height: calc(100vh - 20px); display: flex; flex-direction: column; }
+.app-window { max-width: 1640px; margin: 0 auto; min-height: calc(100vh - 20px); display: flex; flex-direction: column; }
+/* title bar, menus, toolbar and tabs: one block, so it can stick to the top as one */
+.win-head { background: var(--face); }
 .title-bar { background: linear-gradient(90deg, var(--title-a), var(--title-b)); padding: 4px 4px 4px 6px; min-height: 30px; }
 .title-bar-text { display: flex; align-items: center; gap: 6px; font-family: var(--font); font-size: 15px; font-weight: bold; color: #fff; letter-spacing: 0.2px; margin-right: 8px; }
 .app-icon { display: inline-flex; width: 16px; height: 16px; }
@@ -111,12 +113,27 @@ body.whats-this, body.whats-this * { cursor: help !important; }
 .tb-btn:disabled .px-icon { opacity: .35; filter: grayscale(1); }
 .tb-sep { width: 2px; height: 44px; margin: 0 4px; border-left: 1px solid var(--shadow); border-right: 1px solid var(--hilight); }
 .px-icon { image-rendering: pixelated; display: block; }
-.tooltip { position: absolute; z-index: 100; background: var(--tip-bg); color: var(--text); border: 1px solid var(--text); padding: 2px 6px; font-size: 13px; white-space: nowrap; pointer-events: none; box-shadow: 1px 1px 0 rgba(0,0,0,.3); }
+.tooltip { position: fixed; z-index: 100; background: var(--tip-bg); color: var(--text); border: 1px solid var(--text); padding: 2px 6px; font-size: 13px; white-space: nowrap; pointer-events: none; box-shadow: 1px 1px 0 rgba(0,0,0,.3); }
 
 /* ---- the two panes ---- */
 .client { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(330px, 390px) minmax(0, 1fr); gap: 8px; padding: 8px 6px 6px; }
 .pane { position: relative; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 4px 8px 8px 2px; }
 .pane-views { padding-right: 6px; }
+
+/* Wider than a phone: the browser's own scroll bar scrolls the drawings.
+   The window's top (title bar to tabs) and its status bar stick to the
+   screen edges, and the inputs list stays put beside the drawings with its
+   own scroll. --head-h and --foot-h come from ui/main.js (they change when
+   the toolbar wraps or the tab note shows). */
+@media (min-width: 901px) {
+  html { scroll-padding-top: calc(var(--head-h, 160px) + 8px); scroll-padding-bottom: calc(var(--foot-h, 30px) + 8px); }
+  .win-head { position: sticky; top: 0; z-index: 40; }
+  .status-bar { position: sticky; bottom: 0; z-index: 40; background: var(--face); margin: 0; padding: 2px 2px 2px; }
+  .client { align-items: start; }
+  .pane-inputs { position: sticky; top: calc(var(--head-h, 160px) + 8px);
+    height: calc(100vh - var(--head-h, 160px) - var(--foot-h, 30px) - 26px); overscroll-behavior: contain; }
+  .pane-views { overflow: visible; overflow-x: clip; }
+}
 .row2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 10px; }
 @media (max-width: 1180px) { .row2 { grid-template-columns: minmax(0, 1fr); } }
 

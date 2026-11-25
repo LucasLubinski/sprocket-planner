@@ -37,6 +37,20 @@ test("hub: other checks", () => {
   assert.equal(analyze({ ...base, counterbore: 2 }).v.screwL, 8);
 });
 
+test("Center the pins: pin center moves to the middle and the print warning shows", () => {
+  const flush = analyze(defaultDesign()), mid = analyze({ ...defaultDesign(), pinCenter: true });
+  near(flush.v.pinZ, 1.4, 1e-9, "flush: half the 2.8 mm pin");
+  near(mid.v.pinZ, 2.5, 1e-9, "centered: half the 5 mm wheel");
+  assert.ok(!ids(flush).includes("pinLift"));
+  assert.ok(ids(mid).includes("pinLift"));
+  assert.match(mid.checks.find(c => c.id === "pinLift").text, /1\.1 mm above the bed/);
+  // the fit numbers come from a cut through the pin centerline, so they don't move
+  assert.equal(mid.v.tight, flush.v.tight);
+  assert.equal(mid.v.holes, flush.v.holes);
+  // a pin as thick as the wheel can't lift; the "thicker than the wheel" stop covers it
+  assert.ok(!ids(analyze({ ...defaultDesign(), pinCenter: true, drumW: 2.5 })).includes("pinLift"));
+});
+
 test("tiny wheel: hub screws don't fit", () => {
   const m = analyze({ ...defaultDesign(), travel: 76.2, teeth: 8 });
   assert.ok(ids(m).includes("hub"));

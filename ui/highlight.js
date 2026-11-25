@@ -75,8 +75,11 @@ function createHighlighter({ root, inputsPane, getSettings, isVisibleField }) {
   function scrollIntoViewIfNeeded(el) {
     const pane = el.closest(".pane");
     if (pane && getComputedStyle(pane).overflowY === "auto") {
+      // scroll only the pane: el.scrollIntoView would also move the page,
+      // and the inputs pane is sticky on wide screens
       const pr = pane.getBoundingClientRect(), r = el.getBoundingClientRect();
-      if (r.top < pr.top || r.bottom > pr.bottom) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      const dy = r.top < pr.top ? r.top - pr.top - 8 : r.bottom > pr.bottom ? Math.min(r.bottom - pr.bottom + 8, r.top - pr.top - 8) : 0;
+      if (dy) pane.scrollBy({ top: dy, behavior: "smooth" });
     } else {
       const r = el.getBoundingClientRect();
       if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ block: "center", behavior: "smooth" });
